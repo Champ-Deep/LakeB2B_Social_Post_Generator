@@ -1,0 +1,41 @@
+{
+  "name": "lakeb2b-social-post-generator",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "HOST=0.0.0.0 PORT=3000 next start",
+    "lint": "next lint",
+    "validate": "node scripts/startup-validation.js",
+    "dev:supervised": "node scripts/start-with-supervisor.js",
+    "monitor": "node scripts/monitor-server.js",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug"
+  },
+  "dependencies": {
+    "@chakra-ui/react": "^2.8.2",
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@fontsource/montserrat": "^5.0.16",
+    "axios": "^1.6.5",
+    "canvas": "^2.11.2",
+    "framer-motion": "^10.16.16",
+    "lucide-react": "^0.309.0",
+    "next": "14.0.4",
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "@playwright/mcp": "^0.0.45",
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.0.4",
+    "playwright": "^1.56.1",
+    "typescript": "^5"
+  }
+}
