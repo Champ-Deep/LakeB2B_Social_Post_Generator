@@ -23,11 +23,13 @@ import {
 interface ImagePreviewProps {
   imageUrl: string
   isLoading: boolean
+  style?: string
 }
 
 const ImagePreview: React.FC<ImagePreviewProps> = ({
   imageUrl,
   isLoading,
+  style = 'isometric',
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [processedImageUrl, setProcessedImageUrl] = useState<string>('')
@@ -67,7 +69,8 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          imageUrl: processedImageUrl || imageUrl
+          imageUrl: processedImageUrl || imageUrl,
+          style: style
         }),
       })
 

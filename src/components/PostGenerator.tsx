@@ -19,14 +19,17 @@ import {
 } from '@chakra-ui/react'
 import { ImageIcon, Download, Sparkles } from 'lucide-react'
 import { PostFormData } from '../types/post'
+import { StyleId } from '../types/styles'
 import { brandTheme } from '../theme/brand'
 import ImagePreview from './ImagePreview'
+import StyleSelector from './StyleSelector'
 
 const PostGenerator: React.FC = () => {
   const [formData, setFormData] = useState<PostFormData>({
     message: '',
     headline: '',
   })
+  const [selectedStyle, setSelectedStyle] = useState<StyleId>('isometric')
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string>('')
   const [error, setError] = useState<string>('')
@@ -75,7 +78,10 @@ const PostGenerator: React.FC = () => {
       const response = await fetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ 
+          prompt,
+          style: selectedStyle 
+        }),
       })
 
       const data = await response.json()
@@ -148,6 +154,12 @@ const PostGenerator: React.FC = () => {
                 />
               </FormControl>
 
+              <StyleSelector
+                selectedStyle={selectedStyle}
+                onStyleChange={setSelectedStyle}
+                disabled={isGenerating}
+              />
+
               <Button
                 variant="gradient"
                 size="lg"
@@ -174,6 +186,7 @@ const PostGenerator: React.FC = () => {
             <ImagePreview
               imageUrl={generatedImageUrl}
               isLoading={isGenerating}
+              style={selectedStyle}
             />
           </Box>
         </HStack>

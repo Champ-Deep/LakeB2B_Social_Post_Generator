@@ -14,10 +14,14 @@ export default async function handler(
   }
 
   try {
-    const { prompt } = req.body
+    const { prompt, style = 'isometric' } = req.body
 
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' })
+    }
+
+    if (typeof prompt !== 'string' || prompt.trim().length === 0) {
+      return res.status(400).json({ error: 'Prompt must be a non-empty string' })
     }
 
     if (!GEMINI_API_KEY) {
@@ -27,21 +31,18 @@ export default async function handler(
       })
     }
 
-    // Create simple business illustration prompt
-    const fullPrompt = `Create a professional isometric 3D business illustration:
+    // Import style configuration
+    const { getStylePrompt } = await import('../../types/styles')
+    
+    // Get the style-specific prompt
+    const stylePrompt = getStylePrompt(style as any)
+    
+    // Create the full prompt by combining style requirements with user input
+    const fullPrompt = `${stylePrompt}
 
-STYLE: Clean isometric perspective, modern 3D graphics with sharp geometric shapes
-BACKGROUND: Vibrant gradient from deep purple to orange to magenta (LakeB2B brand colors)
-ELEMENTS: Business professionals, floating screens with data visualizations, laptops, modern technology
 BUSINESS CONTEXT: ${prompt}
 
-CRITICAL REQUIREMENTS: 
-- Square format (1080x1080)
-- ABSOLUTELY NO logos, text, labels, or branding anywhere in the image
-- Keep the bottom-left corner (200x150px area) completely clear and unoccupied by any elements
-- Do not place any visual elements, characters, or objects in the bottom-left corner area
-- Professional B2B social media quality
-- Focus all visual elements in the center and right portions of the image`
+Please create an illustration that incorporates this business context while following all the style requirements above.`
 
     // Direct Gemini 2.5 Flash Image API call
     const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent', {
@@ -86,6 +87,7 @@ CRITICAL REQUIREMENTS:
             imageUrl: finalImageUrl,
             prompt: fullPrompt,
             originalPrompt: prompt,
+            style: style,
             message: 'Image generated and logo added successfully'
           })
         }
@@ -97,6 +99,7 @@ CRITICAL REQUIREMENTS:
         imageUrl: null,
         prompt: fullPrompt,
         originalPrompt: prompt,
+        style: style,
         message: 'Text response received instead of image',
         textResponse
       })
