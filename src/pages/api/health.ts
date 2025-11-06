@@ -1,59 +1,26 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
+import { HealthCheckResult } from '../../lib/api/interfaces/IApiService'
 
-interface HealthCheckResponse {
-  status: 'healthy' | 'unhealthy'
-  timestamp: string
-  version: string
-  services: {
-    imageGeneration: 'available' | 'degraded' | 'unavailable'
-    logoService: 'available' | 'unavailable'
-  }
-  environment: {
-    nodeVersion: string
-    platform: string
-  }
-}
+const startTime = Date.now()
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<HealthCheckResponse>
+  res: NextApiResponse<HealthCheckResult | { error: string }>
 ) {
   if (req.method !== 'GET') {
-    return res.status(405).json({
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      version: '1.0.0',
-      services: {
-        imageGeneration: 'unavailable',
-        logoService: 'unavailable'
-      },
-      environment: {
-        nodeVersion: process.version,
-        platform: process.platform
-      }
-    })
+    return res.status(405).json({ error: 'Method not allowed' })
   }
 
   try {
-    // Check image generation service
-    const geminiApiKey = process.env.GEMINI_API_KEY
-    const imageGenerationStatus = geminiApiKey ? 'available' : 'degraded'
-    
-    // Check logo service (always available since it's just configuration)
-    const logoServiceStatus = 'available'
+    const uptime = Math.floor((Date.now() - startTime) / 1000)
 
-    const healthStatus: HealthCheckResponse = {
-      status: 'healthy',
+    const healthStatus: HealthCheckResult = {
+      status: 'ok',
       timestamp: new Date().toISOString(),
-      version: '1.0.0',
-      services: {
-        imageGeneration: imageGenerationStatus,
-        logoService: logoServiceStatus
-      },
-      environment: {
-        nodeVersion: process.version,
-        platform: process.platform
-      }
+      service: 'lakeb2b-social-post-generator',
+      uptime,
+      environment: process.env.NODE_ENV || 'production',
+      version: process.env.npm_package_version || '0.1.0'
     }
 
     res.status(200).json(healthStatus)
@@ -61,17 +28,10 @@ export default async function handler(
     console.error('Health check error:', error)
     
     res.status(500).json({
-      status: 'unhealthy',
+      status: 'error',
       timestamp: new Date().toISOString(),
-      version: '1.0.0',
-      services: {
-        imageGeneration: 'unavailable',
-        logoService: 'unavailable'
-      },
-      environment: {
-        nodeVersion: process.version,
-        platform: process.platform
-      }
+      service: 'lakeb2b-social-post-generator',
+      environment: process.env.NODE_ENV || 'production'
     })
   }
 }

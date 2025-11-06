@@ -43,6 +43,11 @@ playwright-report/
 test-results/
 logs/
 
+# log files
+server.log
+nohup.out
+*.log
+
 # IDE files
 .cursor/
 .claude/

@@ -42,22 +42,22 @@ class StartupValidator {
       this.log(`✅ Node.js version: ${nodeVersion}`, 'SUCCESS')
     }
 
-    // Check environment variables
-    const requiredEnvVars = ['GEMINI_API_KEY']
-    const optionalEnvVars = []
-    
-    for (const envVar of requiredEnvVars) {
-      if (!process.env[envVar]) {
-        this.errors.push(`Missing required environment variable: ${envVar}`)
-      }
-    }
-
-    for (const envVar of optionalEnvVars) {
-      if (!process.env[envVar]) {
-        this.warnings.push(`Optional environment variable not set: ${envVar}`)
+    // Check for .env.local file
+    const envLocalPath = path.join(this.projectRoot, '.env.local')
+    if (fs.existsSync(envLocalPath)) {
+      this.log(`✅ Environment file exists: .env.local`, 'SUCCESS')
+      
+      // Load and check environment variables from .env.local
+      const envContent = fs.readFileSync(envLocalPath, 'utf8')
+      const hasGeminiKey = envContent.includes('GEMINI_API_KEY=')
+      
+      if (hasGeminiKey) {
+        this.log(`✅ GEMINI_API_KEY found in .env.local`, 'SUCCESS')
       } else {
-        this.log(`✅ Environment variable set: ${envVar}`, 'SUCCESS')
+        this.errors.push('GEMINI_API_KEY not found in .env.local file')
       }
+    } else {
+      this.errors.push('Missing .env.local file with environment variables')
     }
   }
 
@@ -71,7 +71,7 @@ class StartupValidator {
       'src/pages/_app.tsx',
       'src/pages/index.tsx',
       'src/pages/api/health.ts',
-      'public/logos/lakeb2b-logo.png'
+      'public/logos/LakeB2B Logo Square.png'
     ]
 
     for (const file of requiredFiles) {

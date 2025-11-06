@@ -9,33 +9,47 @@ import { ChakraProvider } from '@chakra-ui/react'
 import { theme } from '../theme/chakra-theme'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { logger } from '../utils/logging/logger'
+import { globalErrorHandler } from '../lib/errors/GlobalErrorHandler'
+import { connectionManager } from '../lib/api/ConnectionManager'
+import { ConnectionStatus } from '../components/ConnectionStatus'
+import { appConfig } from '../lib/config/AppConfig'
 
 export default function App({ Component, pageProps }: AppProps) {
-  // Initialize logger on app start
+  // Initialize global systems on app start
   React.useEffect(() => {
+    // Initialize global error handler
+    globalErrorHandler.initialize()
+    
+    // Start connection monitoring
+    if (appConfig.get('features').enableAutoReconnect) {
+      connectionManager.startMonitoring(appConfig.get('connection').checkInterval)
+    }
+    
     logger.info('Application started', {
       component: 'App',
       additionalData: {
         userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'server',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        config: {
+          autoReconnect: appConfig.get('features').enableAutoReconnect,
+          environment: appConfig.isDevelopment() ? 'development' : 'production'
+        }
       }
     })
+    
+    // Cleanup on unmount
+    return () => {
+      connectionManager.stopMonitoring()
+    }
   }, [])
 
   return (
     <ChakraProvider theme={theme}>
       <ErrorBoundary
-        onError={(error, errorInfo) => {
-          logger.fatal('Application-level error', {
-            component: 'App',
-            action: 'render',
-            additionalData: {
-              componentStack: errorInfo.componentStack
-            }
-          }, error)
-        }}
+        onError={globalErrorHandler.createReactErrorHandler()}
       >
         <Component {...pageProps} />
+        <ConnectionStatus />
       </ErrorBoundary>
     </ChakraProvider>
   )

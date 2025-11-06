@@ -23,6 +23,9 @@ import { StyleId } from '../types/styles'
 import { brandTheme } from '../theme/brand'
 import ImagePreview from './ImagePreview'
 import StyleSelector from './StyleSelector'
+import { serviceContainer } from '../lib/api/ServiceContainer'
+import { globalErrorHandler } from '../lib/errors/GlobalErrorHandler'
+import { useConnectionHealth } from '../hooks/useConnectionHealth'
 
 const PostGenerator: React.FC = () => {
   const [formData, setFormData] = useState<PostFormData>({
@@ -34,6 +37,7 @@ const PostGenerator: React.FC = () => {
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string>('')
   const [error, setError] = useState<string>('')
   const toast = useToast()
+  const { isConnected, isChecking, retry } = useConnectionHealth()
 
   const handleInputChange = (field: keyof PostFormData) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -42,18 +46,11 @@ const PostGenerator: React.FC = () => {
   }
 
   const generatePrompt = (data: PostFormData): string => {
-    const { width, height } = brandTheme.sizes.square
-    
-    // Enhanced prompt based on example images
-    const basePrompt = 'Create a high-quality isometric 3D business illustration featuring professional business people in suits'
-    const style = 'with modern isometric perspective, floating data visualization screens, charts, and dashboards'
-    const background = 'Background: Vibrant gradient using LakeB2B brand colors (purple #6D08BE to orange #FFB703 to magenta #DD1286)'
+    // Simple business context prompt - let style prompts handle all visual requirements
     const content = `Business theme: "${data.message}"`
-    const headline = `Headline: "${data.headline}" prominently displayed at the top in bold white text`
-    const elements = 'Include professional business people interacting with data, technology elements, clean shadows, floating elements'
-    const logo = 'LakeB2B logo with "ENABLING GROWTH" text in bottom-left corner'
+    const headline = data.headline ? `Headline: "${data.headline}"` : ''
     
-    return `${basePrompt} ${style}. ${background}. ${content}. ${headline}. ${elements}. ${logo}. Modern B2B aesthetic, ${width}x${height}px, high quality, professional design.`
+    return `${content}. ${headline}`.trim()
   }
 
   const handleGenerate = async () => {
@@ -68,29 +65,39 @@ const PostGenerator: React.FC = () => {
       return
     }
 
+    // Check connection before attempting
+    if (!isConnected) {
+      const reconnected = await retry()
+      if (!reconnected) {
+        toast({
+          title: 'Connection Required',
+          description: 'Please check your internet connection and ensure the server is running.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        })
+        return
+      }
+    }
+
     setIsGenerating(true)
     setError('')
 
     try {
       const prompt = generatePrompt(formData)
+      const imageService = serviceContainer.getImageGenerationService()
       
-      // Call the API route to generate image
-      const response = await fetch('/api/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          prompt,
-          style: selectedStyle 
-        }),
+      // Use the service layer for API calls
+      const response = await imageService.generateImage({
+        prompt,
+        style: selectedStyle
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate image')
+      if (!response.success || !response.data) {
+        throw response.error || new Error('Failed to generate image')
       }
 
-      setGeneratedImageUrl(data.imageUrl)
+      setGeneratedImageUrl(response.data.imageUrl)
       
       toast({
         title: 'Image Generated!',
@@ -100,14 +107,22 @@ const PostGenerator: React.FC = () => {
         isClosable: true,
       })
     } catch (error) {
-      console.error('Generation error:', error)
-      setError(error instanceof Error ? error.message : 'Failed to generate image')
+      const errorMessage = globalErrorHandler.getUserMessage(error)
+      setError(errorMessage)
+      
       toast({
         title: 'Generation Failed',
-        description: 'Unable to generate image. Please try again.',
+        description: errorMessage,
         status: 'error',
         duration: 5000,
         isClosable: true,
+      })
+      
+      // Log the error for debugging
+      globalErrorHandler.handleError(error, { 
+        component: 'PostGenerator',
+        action: 'generateImage',
+        formData 
       })
     } finally {
       setIsGenerating(false)
@@ -168,8 +183,9 @@ const PostGenerator: React.FC = () => {
                 isLoading={isGenerating}
                 loadingText="Generating..."
                 leftIcon={<Sparkles size={20} />}
+                isDisabled={!isConnected && !isChecking}
               >
-                Generate Post
+                {!isConnected && !isChecking ? 'Connection Required' : 'Generate Post'}
               </Button>
 
               {error && (

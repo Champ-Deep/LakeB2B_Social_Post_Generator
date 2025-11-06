@@ -22,10 +22,9 @@ AESTHETIC: Professional B2B social media quality with clean lines and minimal sh
 CRITICAL REQUIREMENTS: 
 - Square format (1080x1080)
 - ABSOLUTELY NO logos, text, labels, or branding anywhere in the image
-- Keep the bottom-left corner (200x150px area) completely clear and unoccupied by any elements
-- Do not place any visual elements, characters, or objects in the bottom-left corner area
+- Natural composition that flows throughout the entire image
 - Professional B2B social media quality
-- Focus all visual elements in the center and right portions of the image`,
+- Distribute visual elements naturally across the full image area`,
     category: 'professional',
     platform: ['linkedin', 'instagram', 'facebook']
   },
@@ -45,7 +44,7 @@ CRITICAL REQUIREMENTS:
 - STRICTLY BLACK AND WHITE ONLY - no color whatsoever
 - Bold, clean line art with strong contrast
 - ABSOLUTELY NO logos, text, labels, or branding anywhere in the image
-- Keep the bottom-left corner (200x150px area) completely clear and unoccupied
+- Natural composition that flows throughout the entire image
 - Cartoon/illustration style, not photorealistic
 - Urban business theme with New York character`,
     category: 'creative',
@@ -58,18 +57,18 @@ CRITICAL REQUIREMENTS:
     systemPrompt: `Create a minimalist professional illustration optimized for LinkedIn:
 
 STYLE: Clean, modern minimalist design with plenty of white space
-COLOR PALETTE: LinkedIn blue (#0077B5) as accent color, neutral grays, and white
+COLOR PALETTE: LakeB2B brand colors - primary purple (#6D08BE), secondary orange (#FFB703), accent magenta (#DD1286), with neutral grays and white
 ELEMENTS: Simple geometric shapes, clean icons, professional symbols, minimal human figures
 AESTHETIC: Corporate presentation style, infographic-inspired, highly readable on mobile
 
 CRITICAL REQUIREMENTS:
 - Square format (1080x1080)
 - Minimalist design principles with lots of white space
-- LinkedIn blue (#0077B5) as primary accent color
+- LakeB2B purple (#6D08BE) as primary color with orange and magenta accents
 - ABSOLUTELY NO logos, text, labels, or branding anywhere in the image
-- Keep the bottom-left corner (200x150px area) completely clear and unoccupied
+- Natural composition that flows throughout the entire image
 - High contrast for mobile viewing
-- Professional business iconography
+- Professional business iconography with LakeB2B brand color scheme
 - Clean, readable design suitable for LinkedIn feed`,
     category: 'minimalist',
     platform: ['linkedin']

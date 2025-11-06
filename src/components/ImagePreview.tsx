@@ -19,6 +19,8 @@ import {
   applyLogoToCanvas, 
   createLogoOverlay 
 } from '../utils/client/canvasUtils'
+import { serviceContainer } from '../lib/api/ServiceContainer'
+import { globalErrorHandler } from '../lib/errors/GlobalErrorHandler'
 
 interface ImagePreviewProps {
   imageUrl: string
@@ -64,23 +66,19 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
     setIsAddingLogo(true)
     
     try {
-      // Use Gemini to replace the placeholder logo with the actual LakeB2B logo
-      const response = await fetch('/api/add-logo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          imageUrl: processedImageUrl || imageUrl,
-          style: style
-        }),
+      const imageService = serviceContainer.getImageGenerationService()
+      
+      // Use the service layer for API calls
+      const response = await imageService.addLogo({
+        imageUrl: processedImageUrl || imageUrl,
+        style: style || 'isometric'
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to add logo')
+      if (!response.success || !response.data) {
+        throw response.error || new Error('Failed to add logo')
       }
 
-      setProcessedImageUrl(data.imageUrl)
+      setProcessedImageUrl(response.data.imageUrl)
       
       toast({
         title: 'Logo Replaced!',
@@ -90,13 +88,21 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
         isClosable: true,
       })
     } catch (error) {
-      console.error('Logo replacement error:', error)
+      const errorMessage = globalErrorHandler.getUserMessage(error)
+      
       toast({
         title: 'Logo Replacement Failed',
-        description: error instanceof Error ? error.message : 'Unable to replace logo. Please try again.',
+        description: errorMessage,
         status: 'error',
         duration: 5000,
         isClosable: true,
+      })
+      
+      // Log the error for debugging
+      globalErrorHandler.handleError(error, {
+        component: 'ImagePreview',
+        action: 'addLogo',
+        imageUrl: processedImageUrl || imageUrl
       })
     } finally {
       setIsAddingLogo(false)
