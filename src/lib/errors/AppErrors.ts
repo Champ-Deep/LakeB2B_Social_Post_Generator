@@ -217,13 +217,13 @@ export class ErrorUtils {
         return new TimeoutError(0, 'Unknown operation')
       }
       
-      return new AppError(error.message, 'UNKNOWN_ERROR', true)
+      return new ServiceError('Unknown', error.message, 'UNKNOWN_ERROR')
     }
     
-    return new AppError(
+    return new ServiceError(
+      'Unknown',
       typeof error === 'string' ? error : 'An unknown error occurred',
-      'UNKNOWN_ERROR',
-      true
+      'UNKNOWN_ERROR'
     )
   }
 

@@ -37,6 +37,11 @@ export interface ErrorContext {
   lineno?: number
   colno?: number
   message?: string
+  attempt?: number
+  failures?: number
+  threshold?: number
+  intervalMs?: number
+  [key: string]: any  // Allow any additional properties
 }
 
 class Logger {

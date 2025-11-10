@@ -55,7 +55,9 @@ export function useConnectionHealth(options: UseConnectionHealthOptions = {}) {
 
       return isConnected
     } catch (error) {
-      logger.error('Connection check failed in hook', error)
+      logger.error('Connection check failed in hook', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       setState(prev => ({
         ...prev,
         isChecking: false,

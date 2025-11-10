@@ -1,0 +1,10 @@
+{
+  "port": 3000,
+  "fallbackPorts": [3001, 3002, 3003],
+  "healthCheckInterval": 30000,
+  "maxRestartAttempts": 10,
+  "restartDelay": 5000,
+  "autoOpen": true,
+  "environment": "development",
+  "hostname": "127.0.0.1"
+}

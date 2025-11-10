@@ -5,6 +5,7 @@
 export interface ImageGenerationOptions {
   prompt: string
   style: string
+  position?: string
   width?: number
   height?: number
 }

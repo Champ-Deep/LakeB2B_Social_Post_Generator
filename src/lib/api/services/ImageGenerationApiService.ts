@@ -25,13 +25,22 @@ export class ImageGenerationApiService implements IImageGenerationApiService {
       const healthCheck = await this.apiClient.healthCheck()
       return healthCheck
     } catch (error) {
-      logger.error('ImageGenerationApiService availability check failed', error)
+      logger.error('ImageGenerationApiService availability check failed', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return false
     }
   }
 
   async generateImage(params: GenerateImageParams): Promise<ApiResponse<GenerateImageResult>> {
-    logger.info('Generating image', { style: params.style, promptLength: params.prompt.length })
+    logger.info('Generating image', { 
+      style: params.style, 
+      position: params.position,
+      logoSize: params.logoSize,
+      logoOpacity: params.logoOpacity,
+      logoRotation: params.logoRotation,
+      promptLength: params.prompt.length 
+    })
     
     const response = await this.apiClient.post<GenerateImageResult>(
       '/api/generate-image',
@@ -39,7 +48,11 @@ export class ImageGenerationApiService implements IImageGenerationApiService {
         prompt: params.prompt,
         style: params.style,
         width: params.width,
-        height: params.height
+        height: params.height,
+        position: params.position,
+        logoSize: params.logoSize,
+        logoOpacity: params.logoOpacity,
+        logoRotation: params.logoRotation
       }
     )
     

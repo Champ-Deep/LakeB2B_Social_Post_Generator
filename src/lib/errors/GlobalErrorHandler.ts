@@ -84,13 +84,13 @@ export class GlobalErrorHandler {
     // Log the error
     if (ErrorUtils.isOperationalError(appError)) {
       logger.warn('Operational error', {
-        error: appError.toJSON(),
-        context
+        error: JSON.stringify(appError.toJSON()),
+        context: JSON.stringify(context)
       })
     } else {
       logger.error('Unexpected error', {
-        error: appError.toJSON(),
-        context
+        error: JSON.stringify(appError.toJSON()),
+        context: JSON.stringify(context)
       })
     }
 
@@ -99,7 +99,9 @@ export class GlobalErrorHandler {
       try {
         handler(appError, context)
       } catch (handlerError) {
-        logger.error('Error in error handler', handlerError)
+        logger.error('Error in error handler', {
+          error: handlerError instanceof Error ? handlerError.message : String(handlerError)
+        })
       }
     })
   }
@@ -120,10 +122,10 @@ export class GlobalErrorHandler {
    * Create an error boundary handler for React
    */
   createReactErrorHandler() {
-    return (error: Error, errorInfo: { componentStack: string }) => {
+    return (error: Error, errorInfo: { componentStack?: string | null }) => {
       this.handleError(error, {
         type: 'react-error-boundary',
-        componentStack: errorInfo.componentStack
+        componentStack: errorInfo.componentStack || 'Unknown'
       })
     }
   }

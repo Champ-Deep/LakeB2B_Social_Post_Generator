@@ -1,0 +1,13 @@
+{
+  "build": {
+    "env": {
+      "SKIP_CANVAS_BUILD": "1"
+    }
+  },
+  "functions": {
+    "src/pages/api/**/*.ts": {
+      "maxDuration": 30
+    }
+  }
+}
+

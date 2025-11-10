@@ -6,6 +6,7 @@
 export interface ImageGenerationOptions {
   prompt: string
   style: string
+  position?: string
   width?: number
   height?: number
 }
@@ -34,7 +35,8 @@ export class ImageGenerationService {
         },
         body: JSON.stringify({
           prompt: options.prompt,
-          style: options.style
+          style: options.style,
+          position: options.position || 'bottom-left'
         })
       })
       

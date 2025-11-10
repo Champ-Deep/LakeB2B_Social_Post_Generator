@@ -54,22 +54,27 @@ CRITICAL REQUIREMENTS:
     id: 'minimalist-linkedin',
     name: 'Minimalist LinkedIn',
     description: 'Clean, professional LinkedIn-optimized style',
-    systemPrompt: `Create a minimalist professional illustration optimized for LinkedIn:
+    systemPrompt: `Create a clean LinkedIn-optimized professional illustration:
 
-STYLE: Clean, modern minimalist design with plenty of white space
-COLOR PALETTE: LakeB2B brand colors - primary purple (#6D08BE), secondary orange (#FFB703), accent magenta (#DD1286), with neutral grays and white
-ELEMENTS: Simple geometric shapes, clean icons, professional symbols, minimal human figures
-AESTHETIC: Corporate presentation style, infographic-inspired, highly readable on mobile
+STYLE: Ultra-minimalist design with strategic visual hierarchy and refined composition
+BACKGROUND: Clean solid background - pure white (#FFFFFF) or very subtle single-color gradient only
+COLOR PALETTE: Refined LakeB2B brand colors - muted purple (#8B5BB8), soft orange (#F7C566), elegant magenta (#E85BA3), with sophisticated grays (#6B7280, #9CA3AF)
+COMPOSITION: Ultra-clean layout with 1-2 focal elements maximum, abundant negative space, NO geometric patterns or lines
+ELEMENTS: Simple business iconography, clean shapes, minimal data visualization elements, modern corporate symbols
+AESTHETIC: Executive-level presentation quality, refined infographic style, premium mobile-optimized design
 
 CRITICAL REQUIREMENTS:
 - Square format (1080x1080)
-- Minimalist design principles with lots of white space
-- LakeB2B purple (#6D08BE) as primary color with orange and magenta accents
+- Ultra-minimalist design with sophisticated visual hierarchy
+- Clean solid background (white or single subtle gradient) - NO geometric patterns, lines, or complex backgrounds
+- Refined LakeB2B brand colors (muted, not bright)
+- Maximum 1-2 visual elements for true minimalist approach
 - ABSOLUTELY NO logos, text, labels, or branding anywhere in the image
-- Natural composition that flows throughout the entire image
-- High contrast for mobile viewing
-- Professional business iconography with LakeB2B brand color scheme
-- Clean, readable design suitable for LinkedIn feed`,
+- ABSOLUTELY NO geometric background patterns, lines, grids, or decorative elements
+- Abundant negative space usage for premium feel
+- LinkedIn top-performer quality with executive aesthetic
+- Mobile-optimized high contrast and readability
+- Clean, uncluttered, and visually refined composition`,
     category: 'minimalist',
     platform: ['linkedin']
   }

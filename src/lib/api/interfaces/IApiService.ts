@@ -33,6 +33,10 @@ export interface GenerateImageParams {
   style: string
   width?: number
   height?: number
+  position?: string
+  logoSize?: number
+  logoOpacity?: number
+  logoRotation?: number
 }
 
 export interface GenerateImageResult {

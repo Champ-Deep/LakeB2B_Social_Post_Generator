@@ -37,7 +37,7 @@ const nextConfig = {
     return config;
   },
   experimental: {
-    serverComponentsExternalPackages: ['canvas']
+    serverComponentsExternalPackages: ['canvas', 'sharp']
   },
 }
 

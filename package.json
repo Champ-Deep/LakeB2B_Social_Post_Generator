@@ -12,20 +12,30 @@
     "monitor": "node scripts/monitor-server.js",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
-    "test:debug": "playwright test --debug"
+    "test:debug": "playwright test --debug",
+    "start:auto": "node scripts/auto-start.js start",
+    "server:status": "node scripts/auto-start.js status",
+    "server:stop": "node scripts/auto-start.js stop",
+    "restart": "npm run server:stop && sleep 2 && npm run start:auto",
+    "quick-start": "./start-lakeb2b.sh --simple"
   },
   "dependencies": {
     "@chakra-ui/react": "^2.8.2",
     "@emotion/react": "^11.11.1",
     "@emotion/styled": "^11.11.0",
     "@fontsource/montserrat": "^5.0.16",
+    "@types/jsonwebtoken": "^9.0.10",
     "axios": "^1.6.5",
-    "canvas": "^2.11.2",
     "framer-motion": "^10.16.16",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.309.0",
     "next": "14.0.4",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "sharp": "^0.33.5"
+  },
+  "optionalDependencies": {
+    "canvas": "^2.11.2"
   },
   "devDependencies": {
     "@playwright/mcp": "^0.0.45",

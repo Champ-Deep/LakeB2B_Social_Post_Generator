@@ -203,63 +203,28 @@ export class ConnectionManager {
       try {
         listener(this.getState())
       } catch (error) {
-        logger.error('Error in connection state listener', error)
+        logger.error('Error in connection state listener', {
+          error: error instanceof Error ? error.message : String(error)
+        })
       }
     })
   }
 
   /**
-   * Validate port availability (for server-side use)
+   * Validate port availability (client-side always returns true)
    */
   async validatePort(port: number): Promise<boolean> {
-    if (typeof window !== 'undefined') {
-      // Client-side: skip port validation
-      return true
-    }
-
-    try {
-      const net = require('net')
-      const server = net.createServer()
-      
-      return new Promise((resolve) => {
-        server.once('error', (err: any) => {
-          if (err.code === 'EADDRINUSE') {
-            logger.warn(`Port ${port} is already in use`)
-            resolve(false)
-          } else {
-            logger.error(`Port validation failed for ${port}`, err)
-            resolve(false)
-          }
-        })
-
-        server.once('listening', () => {
-          server.close()
-          logger.info(`Port ${port} is available`)
-          resolve(true)
-        })
-
-        server.listen(port)
-      })
-    } catch (error) {
-      logger.error('Port validation error', error)
-      return false
-    }
+    // Port validation is handled server-side only
+    // Client-side always returns true
+    return true
   }
 
   /**
-   * Get recommended port (checking availability)
+   * Get recommended port (client-side returns default)
    */
   async getRecommendedPort(): Promise<number> {
-    const preferredPorts = [3000, 3001, 3002]
-    
-    for (const port of preferredPorts) {
-      if (await this.validatePort(port)) {
-        return port
-      }
-    }
-
-    // If all preferred ports are taken, return default
-    logger.warn('All preferred ports are taken, using default')
+    // Port selection is handled server-side only
+    // Client-side returns the default port
     return 3000
   }
 }

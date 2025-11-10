@@ -106,26 +106,26 @@ export class AppConfig {
 
     // API configuration
     if (process.env.NEXT_PUBLIC_API_BASE_URL) {
-      config.api = { ...config.api, baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL }
+      config.api = { ...(config.api || {}), baseUrl: process.env.NEXT_PUBLIC_API_BASE_URL } as any
     }
     if (process.env.NEXT_PUBLIC_API_TIMEOUT) {
-      config.api = { ...config.api, timeout: parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT) }
+      config.api = { ...(config.api || {}), timeout: parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT) } as any
     }
 
     // Connection configuration
     if (process.env.NEXT_PUBLIC_CONNECTION_CHECK_INTERVAL) {
       config.connection = { 
-        ...config.connection, 
+        ...(config.connection || {}), 
         checkInterval: parseInt(process.env.NEXT_PUBLIC_CONNECTION_CHECK_INTERVAL) 
-      }
+      } as any
     }
 
     // Feature flags
     if (process.env.NEXT_PUBLIC_ENABLE_AUTO_RECONNECT !== undefined) {
       config.features = {
-        ...config.features,
+        ...(config.features || {}),
         enableAutoReconnect: process.env.NEXT_PUBLIC_ENABLE_AUTO_RECONNECT === 'true'
-      }
+      } as any
     }
 
     return config
@@ -164,7 +164,7 @@ export class AppConfig {
    * Deep merge configuration objects
    */
   private deepMerge(...objects: any[]): any {
-    const result = {}
+    const result: any = {}
     
     for (const obj of objects) {
       if (!obj) continue
