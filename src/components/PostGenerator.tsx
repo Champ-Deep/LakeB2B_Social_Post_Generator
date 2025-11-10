@@ -16,15 +16,6 @@ import {
   Spinner,
   Alert,
   AlertIcon,
-  Slider,
-  SliderTrack,
-  SliderFilledTrack,
-  SliderThumb,
-  NumberInput,
-  NumberInputField,
-  NumberInputStepper,
-  NumberIncrementStepper,
-  NumberDecrementStepper,
 } from '@chakra-ui/react'
 import { ImageIcon, Download, Sparkles, User, LogIn } from 'lucide-react'
 import { PostFormData } from '../types/post'
@@ -204,13 +195,7 @@ const PostGenerator: React.FC = () => {
 
   const handleLogoPositionChange = (newPosition: string) => {
     setLogoPosition(newPosition)
-    // Only regenerate if we have a generated image
-    if (generatedImageUrl && formData.message && formData.headline) {
-      // Small delay to ensure state update completes
-      setTimeout(() => {
-        handleGenerate()
-      }, 100)
-    }
+    // Don't auto-regenerate on position change - user can click Generate Post
   }
 
   const handleTopicSelect = (topic: any) => {
@@ -296,6 +281,11 @@ const PostGenerator: React.FC = () => {
                 disabled={isGenerating}
               />
 
+              {/* Trending Topics - Moved up for better UX */}
+              <Box width="full">
+                <TrendingTopics onTopicSelect={handleTopicSelect} compact={true} />
+              </Box>
+
               <FormControl>
                 <FormLabel fontSize="sm" fontWeight="semibold">Logo Position</FormLabel>
                 <Select
@@ -310,78 +300,68 @@ const PostGenerator: React.FC = () => {
                 </Select>
               </FormControl>
 
-              <HStack spacing={4} width="full">
-                <FormControl flex={1}>
-                  <FormLabel fontSize="sm" fontWeight="semibold">
-                    Logo Size: {logoSize}%
-                  </FormLabel>
-                  <Slider
-                    value={logoSize}
-                    onChange={(value) => {
-                      setLogoSize(value)
-                      if (generatedImageUrl && formData.message && formData.headline) {
-                        setTimeout(() => handleGenerate(), 100)
-                      }
-                    }}
-                    min={10}
-                    max={80}
-                    step={5}
-                    isDisabled={isGenerating}
-                  >
-                    <SliderTrack>
-                      <SliderFilledTrack bg="purple.400" />
-                    </SliderTrack>
-                    <SliderThumb />
-                  </Slider>
-                </FormControl>
-
-                <FormControl flex={1}>
-                  <FormLabel fontSize="sm" fontWeight="semibold">
-                    Opacity: {logoOpacity}%
-                  </FormLabel>
-                  <Slider
-                    value={logoOpacity}
-                    onChange={(value) => {
-                      setLogoOpacity(value)
-                      if (generatedImageUrl && formData.message && formData.headline) {
-                        setTimeout(() => handleGenerate(), 100)
-                      }
-                    }}
-                    min={10}
-                    max={100}
-                    step={5}
-                    isDisabled={isGenerating}
-                  >
-                    <SliderTrack>
-                      <SliderFilledTrack bg="purple.400" />
-                    </SliderTrack>
-                    <SliderThumb />
-                  </Slider>
-                </FormControl>
-              </HStack>
+              {/* Logo Customization - Using preset buttons instead of sliders */}
+              <FormControl>
+                <FormLabel fontSize="sm" fontWeight="semibold">Logo Size</FormLabel>
+                <HStack spacing={2} flexWrap="wrap">
+                  {[20, 30, 35, 45, 60].map((size) => (
+                    <Button
+                      key={size}
+                      size="sm"
+                      variant={logoSize === size ? 'solid' : 'outline'}
+                      colorScheme="purple"
+                      onClick={() => setLogoSize(size)}
+                      isDisabled={isGenerating}
+                    >
+                      {size}%
+                    </Button>
+                  ))}
+                </HStack>
+                <Text fontSize="xs" color="gray.500" mt={1}>
+                  Selected: {logoSize}%
+                </Text>
+              </FormControl>
 
               <FormControl>
-                <FormLabel fontSize="sm" fontWeight="semibold">
-                  Rotation: {logoRotation}°
-                </FormLabel>
-                <Slider
-                  value={logoRotation}
-                  onChange={(value) => {
-                    setLogoRotation(value)
-                    if (generatedImageUrl && formData.message && formData.headline) {
-                      setTimeout(() => handleGenerate(), 100)
-                    }
-                  }}
-                  min={-45}
-                  max={45}
-                  step={5}
-                  isDisabled={isGenerating}
-                >
-                  <SliderTrack>
-                    <SliderFilledTrack bg="purple.400" />
-                  </SliderTrack>
-                  <SliderThumb />
-                </Slider>
+                <FormLabel fontSize="sm" fontWeight="semibold">Logo Opacity</FormLabel>
+                <HStack spacing={2} flexWrap="wrap">
+                  {[60, 75, 85, 95, 100].map((opacity) => (
+                    <Button
+                      key={opacity}
+                      size="sm"
+                      variant={logoOpacity === opacity ? 'solid' : 'outline'}
+                      colorScheme="purple"
+                      onClick={() => setLogoOpacity(opacity)}
+                      isDisabled={isGenerating}
+                    >
+                      {opacity}%
+                    </Button>
+                  ))}
+                </HStack>
+                <Text fontSize="xs" color="gray.500" mt={1}>
+                  Selected: {logoOpacity}%
+                </Text>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel fontSize="sm" fontWeight="semibold">Logo Rotation</FormLabel>
+                <HStack spacing={2} flexWrap="wrap">
+                  {[-15, -5, 0, 5, 15].map((rotation) => (
+                    <Button
+                      key={rotation}
+                      size="sm"
+                      variant={logoRotation === rotation ? 'solid' : 'outline'}
+                      colorScheme="purple"
+                      onClick={() => setLogoRotation(rotation)}
+                      isDisabled={isGenerating}
+                    >
+                      {rotation > 0 ? `+${rotation}°` : `${rotation}°`}
+                    </Button>
+                  ))}
+                </HStack>
+                <Text fontSize="xs" color="gray.500" mt={1}>
+                  Selected: {logoRotation > 0 ? `+${logoRotation}°` : `${logoRotation}°`}
+                </Text>
               </FormControl>
 
               <Button
@@ -417,11 +397,6 @@ const PostGenerator: React.FC = () => {
             />
           </Box>
         </HStack>
-
-        {/* Trending Topics Section */}
-        <Box>
-          <TrendingTopics onTopicSelect={handleTopicSelect} compact={true} />
-        </Box>
         
         {/* Authentication Modal */}
         <AuthModal 

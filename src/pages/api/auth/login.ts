@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import jwt from 'jsonwebtoken'
 
-const SHARED_PASSWORD = process.env.LAKEB2B_SHARED_PASSWORD || 'lakeb2b2024'
+const SHARED_PASSWORD = process.env.LAKEB2B_SHARED_PASSWORD || 'champ@123'
 const JWT_SECRET = process.env.JWT_SECRET || 'lakeb2b-secret-key-2024'
 
 interface LoginRequest {
