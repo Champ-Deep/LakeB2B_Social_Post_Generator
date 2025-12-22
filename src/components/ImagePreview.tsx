@@ -10,11 +10,17 @@ import {
   Image,
   Center,
   useToast,
+  useDisclosure,
+  Icon,
+  Tooltip,
 } from '@chakra-ui/react'
-import { 
-  Download, 
-  ImageIcon
+import {
+  Download,
+  ImageIcon,
+  Linkedin,
 } from 'lucide-react'
+import LinkedInPostModal from './LinkedInPostModal'
+import LinkedInConnectButton from './LinkedInConnectButton'
 import MiniGame from './MiniGame'
 import { brandTheme } from '../theme/brand'
 import { createDefaultLogoService } from '../services/logoService'
@@ -47,8 +53,10 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
   const [isAddingLogo, setIsAddingLogo] = useState(false)
   const [showMiniGame, setShowMiniGame] = useState(false)
   const [logoSize, setLogoSize] = useState('medium')
+  const [isLinkedInConnected, setIsLinkedInConnected] = useState(false)
   const toast = useToast()
   const { isAuthenticated, addPoints } = useAuth()
+  const { isOpen: isLinkedInModalOpen, onOpen: openLinkedInModal, onClose: closeLinkedInModal } = useDisclosure()
 
   const sizeConfig = brandTheme.sizes.square
 
@@ -181,14 +189,32 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
       <HStack justify="space-between" width="full">
         <Heading size="md">Preview</Heading>
         {(imageUrl || processedImageUrl) && (
-          <Button
-            size="sm"
-            leftIcon={<Download size={16} />}
-            onClick={handleDownload}
-            colorScheme="green"
-          >
-            Download
-          </Button>
+          <HStack spacing={2}>
+            {isAuthenticated && (
+              <Tooltip
+                label={isLinkedInConnected ? "Post to LinkedIn" : "Connect LinkedIn to post"}
+                placement="top"
+              >
+                <Button
+                  size="sm"
+                  leftIcon={<Icon as={Linkedin} boxSize={4} />}
+                  onClick={openLinkedInModal}
+                  colorScheme="linkedin"
+                  isDisabled={!isLinkedInConnected}
+                >
+                  Post to LinkedIn
+                </Button>
+              </Tooltip>
+            )}
+            <Button
+              size="sm"
+              leftIcon={<Download size={16} />}
+              onClick={handleDownload}
+              colorScheme="green"
+            >
+              Download
+            </Button>
+          </HStack>
         )}
       </HStack>
 
@@ -243,6 +269,32 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
       <Text fontSize="sm" color="gray.600" textAlign="center">
         Size: 1080 × 1080px (Square Format)
       </Text>
+
+      {/* LinkedIn Connection Status */}
+      {isAuthenticated && (
+        <Box width="full">
+          <LinkedInConnectButton
+            compact={true}
+            onConnectionChange={setIsLinkedInConnected}
+          />
+        </Box>
+      )}
+
+      {/* LinkedIn Post Modal */}
+      <LinkedInPostModal
+        isOpen={isLinkedInModalOpen}
+        onClose={closeLinkedInModal}
+        imageUrl={processedImageUrl || imageUrl}
+        onPostSuccess={(postUrl) => {
+          toast({
+            title: 'Posted to LinkedIn!',
+            description: 'Your image is now live on LinkedIn.',
+            status: 'success',
+            duration: 5000,
+            isClosable: true,
+          })
+        }}
+      />
     </VStack>
   )
 }

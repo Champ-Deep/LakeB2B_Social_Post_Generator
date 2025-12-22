@@ -84,7 +84,11 @@ export class ApiClient {
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        const response = await this.fetchWithTimeout(url, fetchOptions, timeout)
+        // Include credentials (cookies) for authentication
+        const response = await this.fetchWithTimeout(url, {
+          ...fetchOptions,
+          credentials: 'include',
+        }, timeout)
         
         // Reset circuit breaker on success
         this.resetCircuitBreaker()

@@ -50,17 +50,18 @@ export default async function handler(
       })
     }
 
-    // Validate email domain
+    // Validate email domain (case-insensitive - accept any domain containing "lakeb2b")
     const emailLower = email.toLowerCase().trim()
-    if (!emailLower.endsWith('@lakeb2b.com')) {
+    const emailParts = emailLower.split('@')
+    if (emailParts.length !== 2 || !emailParts[1].includes('lakeb2b')) {
       return res.status(401).json({
         success: false,
-        error: 'Access restricted to @lakeb2b.com email addresses'
+        error: 'Access restricted to lakeb2b email addresses'
       })
     }
 
-    // Validate password
-    if (password !== SHARED_PASSWORD) {
+    // Validate password (case-insensitive)
+    if (password.toLowerCase() !== SHARED_PASSWORD.toLowerCase()) {
       return res.status(401).json({
         success: false,
         error: 'Invalid credentials'

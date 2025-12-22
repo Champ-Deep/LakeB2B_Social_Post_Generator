@@ -13,6 +13,7 @@ import { logger } from '../utils/logging/logger'
 import { globalErrorHandler } from '../lib/errors/GlobalErrorHandler'
 import { connectionManager } from '../lib/api/ConnectionManager'
 import { ConnectionStatus } from '../components/ConnectionStatus'
+import { GubeyProvider, GubeyButton } from '../components/Gubey'
 import { appConfig } from '../lib/config/AppConfig'
 
 export default function App({ Component, pageProps }: AppProps) {
@@ -52,12 +53,15 @@ export default function App({ Component, pageProps }: AppProps) {
   return (
     <ChakraProvider theme={theme}>
       <AuthProvider>
-        <ErrorBoundary
-          onError={globalErrorHandler.createReactErrorHandler()}
-        >
-          <Component {...pageProps} />
-          <ConnectionStatus />
-        </ErrorBoundary>
+        <GubeyProvider>
+          <ErrorBoundary
+            onError={globalErrorHandler.createReactErrorHandler()}
+          >
+            <Component {...pageProps} />
+            <ConnectionStatus />
+            <GubeyButton />
+          </ErrorBoundary>
+        </GubeyProvider>
       </AuthProvider>
     </ChakraProvider>
   )

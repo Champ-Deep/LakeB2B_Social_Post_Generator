@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Box,
   Container,
@@ -6,7 +6,6 @@ import {
   HStack,
   FormControl,
   FormLabel,
-  Textarea,
   Input,
   Select,
   Button,
@@ -31,6 +30,9 @@ import { serviceContainer } from '../lib/api/ServiceContainer'
 import { globalErrorHandler } from '../lib/errors/GlobalErrorHandler'
 import { useConnectionHealth } from '../hooks/useConnectionHealth'
 import { useAuth } from '../contexts/AuthContext'
+import { MemeFormatId } from '../types/styles'
+import MemeSelector from './MemeSelector'
+import { useGubey } from './Gubey'
 
 const PostGenerator: React.FC = () => {
   const [formData, setFormData] = useState<PostFormData>({
@@ -47,9 +49,70 @@ const PostGenerator: React.FC = () => {
   const [logoOpacity, setLogoOpacity] = useState(85) // Default 85% opacity
   const [logoRotation, setLogoRotation] = useState(0) // Default 0 degrees
   const [showAuthModal, setShowAuthModal] = useState(false)
+  const [selectedMemeFormat, setSelectedMemeFormat] = useState<MemeFormatId>('auto')
+  const [memeTexts, setMemeTexts] = useState<Record<string, string>>({})
   const toast = useToast()
   const { isConnected, isChecking, retry } = useConnectionHealth()
   const { isAuthenticated, addPoints, incrementGeneration } = useAuth()
+  const { dispatch: gubeyDispatch } = useGubey()
+
+  const isMemeStyleSelected = selectedStyle === 'meme'
+
+  // Auto-generate smart meme text suggestions
+  const generateSmartMemeText = (format: MemeFormatId, message: string, headline: string) => {
+    const combined = `${message} ${headline}`.toLowerCase()
+    const newTexts: Record<string, string> = {}
+    
+    switch (format) {
+      case 'drake':
+        if (combined.includes('old') || combined.includes('before')) {
+          newTexts.top = 'Old way of doing things'
+          newTexts.bottom = 'Our new approach'
+        } else {
+          newTexts.top = 'Traditional methods'
+          newTexts.bottom = 'Our solution'
+        }
+        break
+        
+      case 'distracted':
+        newTexts.girlfriend = 'Current solution'
+        newTexts.boyfriend = 'You'
+        newTexts['other-woman'] = 'Our tempting offer'
+        break
+        
+      case 'woman-cat':
+        newTexts.woman = 'Complaints about change'
+        newTexts.cat = 'Us knowing it works'
+        break
+        
+      case 'change-mind':
+        newTexts.sign = `${headline || 'Our approach'} is the best solution`
+        break
+    }
+    
+    setMemeTexts(newTexts)
+  }
+
+  // Auto-select meme format based on content
+  const selectBestMemeFormat = (message: string, headline: string): MemeFormatId => {
+    const combined = `${message} ${headline}`.toLowerCase()
+    
+    if (combined.includes('before') || combined.includes('after') || combined.includes('old') || combined.includes('new')) {
+      return 'drake'
+    } else if (combined.includes('frustrated') || combined.includes('complaint') || combined.includes('angry')) {
+      return 'woman-cat'
+    } else if (combined.includes('convince') || combined.includes('prove') || combined.includes('debate')) {
+      return 'change-mind'
+    } else if (combined.includes('tempted') || combined.includes('versus') || combined.includes('option')) {
+      return 'distracted'
+    }
+    
+    return 'drake' // Default fallback
+  }
+
+  const handleMemeTextChange = (textId: string, value: string) => {
+    setMemeTexts(prev => ({ ...prev, [textId]: value }))
+  }
 
   const handleInputChange = (field: keyof PostFormData) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -66,6 +129,19 @@ const PostGenerator: React.FC = () => {
   }
 
   const handleGenerate = async () => {
+    // Check authentication first
+    if (!isAuthenticated) {
+      toast({
+        title: 'Login Required',
+        description: 'Please log in to generate images',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      })
+      setShowAuthModal(true)
+      return
+    }
+
     if (!formData.message || !formData.headline) {
       toast({
         title: 'Required Fields Missing',
@@ -96,6 +172,9 @@ const PostGenerator: React.FC = () => {
     setError('')
     setGenerationProgress(0)
 
+    // Notify Gubey mascot that generation started
+    gubeyDispatch({ type: 'START_GENERATION' })
+
     // Simulate progress for mini-game
     const progressInterval = setInterval(() => {
       setGenerationProgress(prev => {
@@ -105,6 +184,18 @@ const PostGenerator: React.FC = () => {
     }, 800)
 
     try {
+      let actualMemeFormat = selectedMemeFormat
+      
+      // Auto-select best format if needed
+      if (selectedStyle === 'meme' && selectedMemeFormat === 'auto') {
+        actualMemeFormat = selectBestMemeFormat(formData.message, formData.headline)
+        
+        // Generate smart text suggestions for auto-selected format
+        if (formData.message || formData.headline) {
+          generateSmartMemeText(actualMemeFormat, formData.message, formData.headline)
+        }
+      }
+
       const prompt = generatePrompt(formData)
       const imageService = serviceContainer.getImageGenerationService()
       
@@ -112,6 +203,8 @@ const PostGenerator: React.FC = () => {
       const response = await imageService.generateImage({
         prompt,
         style: selectedStyle,
+        memeFormat: selectedStyle === 'meme' ? actualMemeFormat : undefined,
+        memeTexts: selectedStyle === 'meme' ? memeTexts : undefined,
         position: logoPosition,
         logoSize,
         logoOpacity,
@@ -119,30 +212,82 @@ const PostGenerator: React.FC = () => {
       })
 
       if (!response.success || !response.data) {
-        throw response.error || new Error('Failed to generate image')
+        // Check if it's an authentication error (401 status or UNAUTHORIZED code)
+        const error = response.error
+        if (
+          response.statusCode === 401 || 
+          error?.code === 'UNAUTHORIZED' ||
+          error?.message?.includes('Authentication') ||
+          error?.message?.includes('UNAUTHORIZED')
+        ) {
+          toast({
+            title: 'Authentication Required',
+            description: 'Your session has expired. Please log in again.',
+            status: 'error',
+            duration: 5000,
+            isClosable: true,
+          })
+          setShowAuthModal(true)
+          return
+        }
+        throw error || new Error('Failed to generate image')
       }
 
       clearInterval(progressInterval)
       setGenerationProgress(100)
       setGeneratedImageUrl(response.data.imageUrl)
-      
+
+      // Notify Gubey mascot of success (triggers celebration animation)
+      gubeyDispatch({ type: 'GENERATION_SUCCESS' })
+
       // Award points and track generation if user is authenticated
       if (isAuthenticated) {
         await addPoints(10) // 10 points per generation
         await incrementGeneration()
       }
-      
-      toast({
-        title: 'Image Generated!',
-        description: isAuthenticated 
-          ? 'Your social post image has been created successfully. +10 points earned!'
-          : 'Your social post image has been created successfully.',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      })
+
+      // Check for fallback - show warning if AI was unavailable
+      const responseData = response.data
+      if (responseData?.fallback) {
+        setTimeout(() => {
+          toast({
+            title: 'AI Image Generation Unavailable',
+            description: responseData.fallbackReason || 'Using preview placeholder. The AI image generation service is temporarily unavailable. Please try again later.',
+            status: 'warning',
+            duration: 8000,
+            isClosable: true,
+          })
+        }, 500)
+      } else {
+        // Single consolidated success toast - wait for progress to complete
+        setTimeout(() => {
+          const successMessage = isAuthenticated
+            ? 'Image generated successfully! +10 points earned!'
+            : 'Image generated successfully!'
+
+          const memeInfo = selectedStyle === 'meme' && actualMemeFormat !== 'auto'
+            ? ` Used ${actualMemeFormat.replace('-', ' ')} meme format.`
+            : ''
+
+          const modelInfo = responseData?.modelUsed
+            ? ` (${responseData.modelUsed.split('-')[0]})`
+            : ''
+
+          toast({
+            title: 'Success!',
+            description: successMessage + memeInfo + modelInfo,
+            status: 'success',
+            duration: 3000,
+            isClosable: true,
+          })
+        }, 500) // Small delay to let progress complete
+      }
     } catch (error) {
       clearInterval(progressInterval)
+
+      // Notify Gubey mascot of error (triggers shake animation)
+      gubeyDispatch({ type: 'GENERATION_ERROR' })
+
       const errorMessage = globalErrorHandler.getUserMessage(error)
       setError(errorMessage)
       
@@ -167,6 +312,23 @@ const PostGenerator: React.FC = () => {
 
   const handleStyleChange = (newStyle: string) => {
     setSelectedStyle(newStyle as StyleId)
+    
+    // Adjust logo size based on style for better visibility
+    if (newStyle === 'newyork-cartoon') {
+      // Increase logo size for New York Cartoon style for better visibility
+      // Use max opacity since the background area is lightened in the prompt
+      setLogoSize(45) // 45% for better visibility
+      setLogoOpacity(100) // Full opacity for maximum visibility on lightened background
+    } else if (newStyle === 'meme') {
+      // Keep default size for meme style
+      setLogoSize(35)
+      setLogoOpacity(85)
+    } else {
+      // Reset to defaults for other styles
+      setLogoSize(35)
+      setLogoOpacity(85)
+    }
+    
     if (generatedImageUrl) {
       // Re-generate with new style
       handleGenerate()
@@ -253,6 +415,11 @@ const PostGenerator: React.FC = () => {
           {/* Form Panel */}
           <Box flex={1} bg="white" p={6} borderRadius="lg" boxShadow="md">
             <VStack spacing={5}>
+              {/* Trending Topics - Moved to top for better visibility */}
+              <Box width="full">
+                <TrendingTopics onTopicSelect={handleTopicSelect} compact={true} />
+              </Box>
+
               <FormControl isRequired>
                 <RichTextEditor
                   label="Post Message"
@@ -281,10 +448,16 @@ const PostGenerator: React.FC = () => {
                 disabled={isGenerating}
               />
 
-              {/* Trending Topics - Moved up for better UX */}
-              <Box width="full">
-                <TrendingTopics onTopicSelect={handleTopicSelect} compact={true} />
-              </Box>
+              {/* Meme Selector - Show only when meme style is selected */}
+              {isMemeStyleSelected && (
+                <MemeSelector
+                  selectedFormat={selectedMemeFormat}
+                  onFormatChange={setSelectedMemeFormat}
+                  memeTexts={memeTexts}
+                  onTextChange={handleMemeTextChange}
+                  disabled={isGenerating}
+                />
+              )}
 
               <FormControl>
                 <FormLabel fontSize="sm" fontWeight="semibold">Logo Position</FormLabel>

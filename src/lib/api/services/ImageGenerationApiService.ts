@@ -52,7 +52,9 @@ export class ImageGenerationApiService implements IImageGenerationApiService {
         position: params.position,
         logoSize: params.logoSize,
         logoOpacity: params.logoOpacity,
-        logoRotation: params.logoRotation
+        logoRotation: params.logoRotation,
+        memeFormat: params.memeFormat,
+        memeTexts: params.memeTexts
       }
     )
     

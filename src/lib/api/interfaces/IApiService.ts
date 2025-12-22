@@ -37,6 +37,8 @@ export interface GenerateImageParams {
   logoSize?: number
   logoOpacity?: number
   logoRotation?: number
+  memeFormat?: string
+  memeTexts?: Record<string, string>
 }
 
 export interface GenerateImageResult {
@@ -45,6 +47,11 @@ export interface GenerateImageResult {
   originalPrompt: string
   style: string
   message?: string
+  // Fallback detection fields
+  fallback?: boolean
+  fallbackReason?: string
+  modelUsed?: string
+  modelsAttempted?: string[]
 }
 
 export interface AddLogoParams {

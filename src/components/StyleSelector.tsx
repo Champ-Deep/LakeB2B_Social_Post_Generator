@@ -129,8 +129,10 @@ const StyleSelector: React.FC<StyleSelectorProps> = ({
             <Text fontSize="xs" color="gray.600">
               <Text as="span" fontWeight="medium">Style Tips:</Text>
               {selectedStyleOption.id === 'isometric' && ' Creates modern 3D business scenes with professional gradients.'}
-              {selectedStyleOption.id === 'newyork-cartoon' && ' Produces bold B&W illustrations perfect for editorial content.'}
+              {selectedStyleOption.id === 'infographic' && ' Generates data visualizations with charts, graphs, and statistics. Perfect for presenting business metrics and insights.'}
+              {selectedStyleOption.id === 'newyork-cartoon' && ' Produces bold B&W illustrations perfect for editorial content. Logo area is automatically lightened in the image for maximum visibility.'}
               {selectedStyleOption.id === 'minimalist-linkedin' && ' Generates clean, mobile-friendly designs for professional networks.'}
+              {selectedStyleOption.id === 'meme' && ' Uses real internet meme templates with AI-generated text. Choose from Drake, Distracted Boyfriend, Woman Yelling at Cat, and Change My Mind formats.'}
             </Text>
           </Box>
         </Box>

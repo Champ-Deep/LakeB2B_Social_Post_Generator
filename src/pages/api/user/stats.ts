@@ -1,7 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import jwt from 'jsonwebtoken'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'lakeb2b-secret-key-2024'
+import { getSessionFromRequest } from '../../../lib/supabase/auth'
 
 // In-memory database simulation (replace with real database)
 interface UserStats {
@@ -20,20 +18,6 @@ interface UserStats {
 // Temporary in-memory storage - replace with database
 const userStatsDB = new Map<string, UserStats>()
 
-// Initialize demo user stats
-userStatsDB.set('lakeb2b-demo', {
-  userId: 'lakeb2b-demo',
-  totalPoints: 250,
-  level: 3,
-  achievements: ['first_generation', 'style_explorer', 'mini_game_master'],
-  generationCount: 15,
-  lastLoginAt: new Date(),
-  loginStreak: 5,
-  weeklyPoints: 120,
-  weeklyGenerations: 8,
-  createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // 30 days ago
-})
-
 interface StatsResponse {
   success: boolean
   stats?: UserStats
@@ -44,22 +28,6 @@ interface UpdateStatsRequest {
   action: 'add_points' | 'increment_generation' | 'add_achievement' | 'update_login'
   points?: number
   achievement?: string
-}
-
-// Verify JWT token and get user
-function verifyUser(req: NextApiRequest): { userId: string; email: string } | null {
-  try {
-    const token = req.cookies.lakeb2b_token || 
-                  (req.headers.authorization?.startsWith('Bearer ') ? 
-                   req.headers.authorization.substring(7) : null)
-    
-    if (!token) return null
-    
-    const decoded = jwt.verify(token, JWT_SECRET) as any
-    return { userId: decoded.userId, email: decoded.email }
-  } catch {
-    return null
-  }
 }
 
 // Calculate level from points
@@ -92,17 +60,20 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<StatsResponse>
 ) {
-  const user = verifyUser(req)
-  if (!user) {
+  // Check authentication using Supabase
+  const authResult = await getSessionFromRequest(req)
+  if (!authResult.authenticated || !authResult.user) {
     return res.status(401).json({
       success: false,
       error: 'Unauthorized'
     })
   }
 
+  const userId = authResult.user.id
+
   if (req.method === 'GET') {
     // Get user stats
-    const stats = getUserStats(user.userId)
+    const stats = getUserStats(userId)
     return res.status(200).json({
       success: true,
       stats
@@ -120,7 +91,7 @@ export default async function handler(
       })
     }
 
-    const stats = getUserStats(user.userId)
+    const stats = getUserStats(userId)
 
     switch (action) {
       case 'add_points':
@@ -177,7 +148,7 @@ export default async function handler(
         })
     }
 
-    userStatsDB.set(user.userId, stats)
+    userStatsDB.set(userId, stats)
 
     return res.status(200).json({
       success: true,

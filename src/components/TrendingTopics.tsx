@@ -52,8 +52,8 @@ interface TrendingTopicsProps {
   compact?: boolean
 }
 
-// Mock trending topics data (in production, this would come from APIs like Twitter, Google Trends, etc.)
-const mockTrendingTopics: TrendingTopic[] = [
+// Extended trending topics data with rotation support
+const ALL_TRENDING_TOPICS: TrendingTopic[] = [
   {
     id: '1',
     title: 'AI-Powered Sales Automation',
@@ -103,6 +103,36 @@ const mockTrendingTopics: TrendingTopic[] = [
     trending_since: '12 hours ago',
     keywords: ['video marketing', 'B2B content', 'lead generation', 'social media', 'engagement'],
     suggestion: 'Why video content just became our #1 lead generation tool (and how to start today) 🎥'
+  },
+  {
+    id: '6',
+    title: 'Blockchain in Supply Chain',
+    description: 'Companies are leveraging blockchain technology to improve supply chain transparency and efficiency.',
+    category: 'technology',
+    engagement: 890,
+    trending_since: '3 hours ago',
+    keywords: ['blockchain', 'supply chain', 'transparency', 'logistics', 'traceability'],
+    suggestion: 'How blockchain transformed our supply chain visibility - lessons learned 🔗'
+  },
+  {
+    id: '7',
+    title: 'Employee Mental Health Programs',
+    description: 'Organizations are investing heavily in mental health support and wellbeing initiatives.',
+    category: 'business',
+    engagement: 1150,
+    trending_since: '5 hours ago',
+    keywords: ['mental health', 'employee wellbeing', 'workplace culture', 'benefits', 'support'],
+    suggestion: 'Why we made mental health our #1 HR priority (and the impact it had) 🧠'
+  },
+  {
+    id: '8',
+    title: 'Personalized Customer Experiences',
+    description: 'Brands are using AI and data analytics to create hyper-personalized customer journeys.',
+    category: 'marketing',
+    engagement: 950,
+    trending_since: '1 hour ago',
+    keywords: ['personalization', 'customer experience', 'AI', 'data analytics', 'journey mapping'],
+    suggestion: 'From generic to genius: How we personalized 50,000 customer journeys ✨'
   }
 ]
 
@@ -124,10 +154,25 @@ const TrendingTopics: React.FC<TrendingTopicsProps> = ({ onTopicSelect, compact 
 
   const loadTrendingTopics = async () => {
     setLoading(true)
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setTopics(mockTrendingTopics)
-    setLoading(false)
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      // Get a random set of 5-6 topics from the larger pool
+      const shuffled = [...ALL_TRENDING_TOPICS].sort(() => Math.random() - 0.5)
+      const selectedTopics = shuffled.slice(0, 5 + Math.floor(Math.random() * 2))
+      
+      // Update engagement and timestamps to feel dynamic
+      const refreshedTopics = selectedTopics.map(topic => ({
+        ...topic,
+        engagement: topic.engagement + Math.floor(Math.random() * 50) - 25,
+        trending_since: ['Just now', '1 hour ago', '2 hours ago', '3 hours ago'][Math.floor(Math.random() * 4)]
+      }))
+
+      setTopics(refreshedTopics)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const filterTopics = () => {
