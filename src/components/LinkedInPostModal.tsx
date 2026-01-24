@@ -36,6 +36,7 @@ import {
 } from '@chakra-ui/react'
 import toast from 'react-hot-toast'
 import { Linkedin, Send, ExternalLink, Eye, Users, Clock, Calendar, Copy, Check, Download } from 'lucide-react'
+import { trackSocialShare } from '../lib/analytics/posthog'
 
 interface LinkedInPostModalProps {
   isOpen: boolean
@@ -148,6 +149,7 @@ const LinkedInPostModal: React.FC<LinkedInPostModalProps> = ({
           setPostResult({ success: true, postUrl: data.postUrl })
           onPostSuccess?.(data.postUrl)
           toast.success('Posted to LinkedIn!')
+          trackSocialShare({ platform: 'linkedin', success: true, contentType: 'generated_image' })
         }
       } else {
         const errorMessage = data.error || data.message || 'Failed to post to LinkedIn'
@@ -162,10 +164,12 @@ const LinkedInPostModal: React.FC<LinkedInPostModalProps> = ({
         } else {
           toast.error(errorMessage)
         }
+        trackSocialShare({ platform: 'linkedin', success: false, contentType: 'generated_image' })
       }
     } catch (error) {
       console.error('LinkedIn post error:', error)
       toast.error('An unexpected error occurred. Please try again.')
+      trackSocialShare({ platform: 'linkedin', success: false, contentType: 'generated_image' })
     } finally {
       setIsPosting(false)
     }

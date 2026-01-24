@@ -22,11 +22,13 @@ import {
   Download,
   ImageIcon,
   Linkedin,
+  Twitter,
   Edit3,
   Move,
 } from 'lucide-react'
 import LinkedInPostModal from './LinkedInPostModal'
 import LinkedInConnectButton from './LinkedInConnectButton'
+import TwitterPostModal from './TwitterPostModal'
 import TwitterConnectButton from './TwitterConnectButton'
 import ShareButtons from './ShareButtons'
 import PostEditor from './PostEditor'
@@ -43,6 +45,7 @@ import {
 import { serviceContainer } from '../lib/api/ServiceContainer'
 import { globalErrorHandler } from '../lib/errors/GlobalErrorHandler'
 import { useAuth } from '../contexts/AuthContext'
+import { trackFeatureUsage } from '../lib/analytics/posthog'
 
 interface ImagePreviewProps {
   imageUrl: string
@@ -68,6 +71,7 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
   const [isTwitterConnected, setIsTwitterConnected] = useState(false)
   const { isAuthenticated, addPoints } = useAuth()
   const { isOpen: isLinkedInModalOpen, onOpen: openLinkedInModal, onClose: closeLinkedInModal } = useDisclosure()
+  const { isOpen: isTwitterModalOpen, onOpen: openTwitterModal, onClose: closeTwitterModal } = useDisclosure()
   const { isOpen: isPostEditorOpen, onOpen: openPostEditor, onClose: closePostEditor } = useDisclosure()
   const { isOpen: isCanvasOpen, onOpen: openCanvas, onClose: closeCanvas } = useDisclosure()
 
@@ -94,6 +98,8 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
   // Keeping minimal structure for potential future canvas operations
 
   const handleDownload = () => {
+    trackFeatureUsage('download', { hasLogo: true })
+
     if (!isBrowser()) {
       console.error('Download requires browser environment')
       return
@@ -175,7 +181,10 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
               <Button
                 size="sm"
                 leftIcon={<Icon as={Move} boxSize={4} />}
-                onClick={openCanvas}
+                onClick={() => {
+                  trackFeatureUsage('logo_editor')
+                  openCanvas()
+                }}
                 colorScheme="orange"
               >
                 Edit Logo
@@ -185,26 +194,44 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
               <Button
                 size="sm"
                 leftIcon={<Icon as={Edit3} boxSize={4} />}
-                onClick={openPostEditor}
+                onClick={() => {
+                  trackFeatureUsage('post_editor')
+                  openPostEditor()
+                }}
                 colorScheme="purple"
               >
                 Format Post
               </Button>
             </Tooltip>
             {isAuthenticated && (
-              <Tooltip
-                label={isLinkedInConnected ? "Post to LinkedIn" : "Share to LinkedIn (copy & download)"}
-                placement="top"
-              >
-                <Button
-                  size="sm"
-                  leftIcon={<Icon as={Linkedin} boxSize={4} />}
-                  onClick={openLinkedInModal}
-                  colorScheme="linkedin"
+              <>
+                <Tooltip
+                  label={isLinkedInConnected ? "Post to LinkedIn" : "Share to LinkedIn (copy & download)"}
+                  placement="top"
                 >
-                  {isLinkedInConnected ? 'Post to LinkedIn' : 'Share to LinkedIn'}
-                </Button>
-              </Tooltip>
+                  <Button
+                    size="sm"
+                    leftIcon={<Icon as={Linkedin} boxSize={4} />}
+                    onClick={openLinkedInModal}
+                    colorScheme="linkedin"
+                  >
+                    {isLinkedInConnected ? 'Post to LinkedIn' : 'Share to LinkedIn'}
+                  </Button>
+                </Tooltip>
+                <Tooltip
+                  label={isTwitterConnected ? "Post to Twitter" : "Share to Twitter (copy & download)"}
+                  placement="top"
+                >
+                  <Button
+                    size="sm"
+                    leftIcon={<Icon as={Twitter} boxSize={4} />}
+                    onClick={openTwitterModal}
+                    colorScheme="twitter"
+                  >
+                    {isTwitterConnected ? 'Post to Twitter' : 'Share to Twitter'}
+                  </Button>
+                </Tooltip>
+              </>
             )}
             <Button
               size="sm"
@@ -306,6 +333,16 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
         onPostSuccess={(postUrl) => {
           toast.success('Posted to LinkedIn! Your image is now live.')
         }}
+      />
+
+      {/* Twitter Post Modal */}
+      <TwitterPostModal
+        isOpen={isTwitterModalOpen}
+        onClose={closeTwitterModal}
+        imageUrl={processedImageUrl || imageUrl}
+        imageData={processedImageUrl || imageUrl}
+        initialText=""
+        isConnected={isTwitterConnected}
       />
 
       {/* Post Editor Modal */}

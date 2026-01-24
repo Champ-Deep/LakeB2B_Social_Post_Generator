@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "env": {}
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=uwqhplmlceuridmhhlpp"
+    },
+    "vercel-lakeb2b": {
+      "type": "http",
+      "url": "https://mcp.vercel.com/deep-5245s-projects/lake-b2-b-social-post-generator"
+    }
+  }
+}

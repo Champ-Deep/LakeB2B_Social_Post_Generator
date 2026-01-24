@@ -197,7 +197,8 @@ model TwitterConnection {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledPosts ScheduledPost[]
 }
 
 model ScheduledPost {
@@ -205,20 +206,28 @@ model ScheduledPost {
   userId               String
   postId               String?   @unique
   linkedinConnectionId String?
+  twitterConnectionId  String?
+  platform             String    @default("linkedin") // "linkedin" | "twitter"
   postText             String
+  imageUrl             String?
   scheduledFor         DateTime
   status               String    @default("pending") // pending, published, failed
   linkedinPostId       String?
+  twitterPostId        String?
   errorMessage         String?
+  attempts             Int       @default(0)
   createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
   publishedAt          DateTime?
 
-  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post               Post?               @relation(fields: [postId], references: [id], onDelete: SetNull)
-  linkedinConnection LinkedInConnection? @relation(fields: [linkedinConnectionId], references: [id], onDelete: SetNull)
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post               Post?                @relation(fields: [postId], references: [id], onDelete: SetNull)
+  linkedinConnection LinkedInConnection?  @relation(fields: [linkedinConnectionId], references: [id], onDelete: SetNull)
+  twitterConnection  TwitterConnection?   @relation(fields: [twitterConnectionId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([status, scheduledFor])
+  @@index([platform])
 }
 
 model PointsHistory {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState, useRef } from 'react'
 import {
   Box,
   Container,
@@ -20,9 +20,15 @@ import {
   Tab,
   TabPanel,
   Icon,
+  Accordion,
+  AccordionItem,
+  AccordionButton,
+  AccordionPanel,
+  AccordionIcon,
 } from '@chakra-ui/react'
 import toast from 'react-hot-toast'
-import { ImageIcon, Download, Sparkles, User, LogIn, Trash2, Save, Video, Image as ImageIconLucide } from 'lucide-react'
+import { Sparkles, LogIn, Trash2, Save, Video, Image as ImageIconLucide, Upload } from 'lucide-react'
+import ImageUploader from './ImageUploader'
 import { PostFormData } from '../types/post'
 import { StyleId } from '../types/styles'
 import { brandTheme } from '../theme/brand'
@@ -42,6 +48,7 @@ import MemeSelector from './MemeSelector'
 import { MagicFix } from './MagicFix'
 import { useGubey } from './Gubey'
 import { useDraftPersistence, DraftData } from '../hooks/useDraftPersistence'
+import { trackImageGeneration, trackStyleSelection, trackFeatureUsage } from '../lib/analytics/posthog'
 
 const PostGenerator: React.FC = () => {
   const [formData, setFormData] = useState<PostFormData>({
@@ -60,9 +67,11 @@ const PostGenerator: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [selectedMemeFormat, setSelectedMemeFormat] = useState<MemeFormatId>('auto')
   const [memeTexts, setMemeTexts] = useState<Record<string, string>>({})
+  const [customBackground, setCustomBackground] = useState<string | null>(null)
   const { isConnected, isChecking, retry } = useConnectionHealth()
   const { isAuthenticated, addPoints, incrementGeneration } = useAuth()
   const { dispatch: gubeyDispatch } = useGubey()
+  const previousStyleRef = useRef(selectedStyle)
 
   // Draft persistence for form recovery
   const handleDraftRestored = useCallback((draft: DraftData) => {
@@ -264,6 +273,16 @@ const PostGenerator: React.FC = () => {
       setGenerationProgress(100)
       setGeneratedImageUrl(response.data.imageUrl)
 
+      // Track successful generation
+      trackImageGeneration({
+        style: selectedStyle,
+        memeFormat: selectedStyle === 'meme' ? actualMemeFormat : undefined,
+        logoPosition: logoPosition,
+        success: true,
+        duration: response.data?.duration || 0,
+        modelUsed: response.data?.modelUsed || 'unknown'
+      })
+
       // Notify Gubey mascot of success (triggers celebration animation)
       gubeyDispatch({ type: 'GENERATION_SUCCESS' })
 
@@ -312,6 +331,14 @@ const PostGenerator: React.FC = () => {
       const errorMessage = globalErrorHandler.getUserMessage(error)
       setError(errorMessage)
 
+      // Track failed generation
+      trackImageGeneration({
+        style: selectedStyle,
+        memeFormat: selectedStyle === 'meme' ? selectedMemeFormat : undefined,
+        logoPosition: logoPosition,
+        success: false
+      })
+
       toast.error(`Generation failed: ${errorMessage}`)
 
       // Log the error for debugging
@@ -326,6 +353,10 @@ const PostGenerator: React.FC = () => {
   }
 
   const handleStyleChange = (newStyle: string) => {
+    // Track style selection
+    trackStyleSelection(newStyle, previousStyleRef.current)
+    previousStyleRef.current = newStyle as StyleId
+
     setSelectedStyle(newStyle as StyleId)
 
     // Adjust logo size based on style for better visibility
@@ -338,6 +369,8 @@ const PostGenerator: React.FC = () => {
       // Keep default size for meme style
       setLogoSize(35)
       setLogoOpacity(85)
+      // Track meme feature usage
+      trackFeatureUsage('meme_generator', { format: selectedMemeFormat })
     } else {
       // Reset to defaults for other styles
       setLogoSize(35)
@@ -468,6 +501,41 @@ const PostGenerator: React.FC = () => {
                 onStyleChange={setSelectedStyle}
                 disabled={isGenerating}
               />
+
+              {/* Custom Background Upload */}
+              <Accordion allowToggle>
+                <AccordionItem border="none">
+                  <AccordionButton
+                    px={0}
+                    _hover={{ bg: 'transparent' }}
+                  >
+                    <HStack flex="1" spacing={2}>
+                      <Icon as={Upload} boxSize={4} color="purple.500" />
+                      <Text fontSize="sm" fontWeight="semibold" color="purple.600">
+                        Custom Background (Optional)
+                      </Text>
+                    </HStack>
+                    <AccordionIcon />
+                  </AccordionButton>
+                  <AccordionPanel pb={4} px={0}>
+                    <ImageUploader
+                      onUpload={(file, dataUrl) => {
+                        setCustomBackground(dataUrl)
+                        trackFeatureUsage('custom_background_upload')
+                        toast.success('Custom background uploaded!')
+                      }}
+                      onClear={() => {
+                        setCustomBackground(null)
+                        toast('Background cleared', { icon: '🗑️' })
+                      }}
+                      previewUrl={customBackground || undefined}
+                      label="Upload Background Image"
+                      helperText="PNG, JPG, WEBP up to 5MB. Your image will be used as the background."
+                      compact={true}
+                    />
+                  </AccordionPanel>
+                </AccordionItem>
+              </Accordion>
 
               {/* Meme Selector - Show only when meme style is selected */}
               {isMemeStyleSelected && (

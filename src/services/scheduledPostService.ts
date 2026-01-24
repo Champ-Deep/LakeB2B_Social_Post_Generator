@@ -2,7 +2,7 @@
  * Scheduled Post Service
  *
  * Handles processing of scheduled posts - checks for pending posts
- * that are due and publishes them to LinkedIn.
+ * that are due and publishes them to LinkedIn or Twitter.
  */
 
 import { prisma } from '../lib/db/client'
@@ -35,18 +35,22 @@ export async function processScheduledPosts(): Promise<ProcessingResult> {
   const now = new Date()
 
   try {
-    // Find posts that are due for publishing
+    // Find posts that are due for publishing (both LinkedIn and Twitter)
     const pendingPosts = await prisma.scheduledPost.findMany({
       where: {
         status: 'pending',
         scheduledFor: {
           lte: now,
         },
+        platform: {
+          in: ['linkedin', 'twitter'],
+        },
       },
       include: {
         user: true,
         post: true,
         linkedinConnection: true,
+        twitterConnection: true,
       },
       take: BATCH_SIZE,
       orderBy: {
@@ -60,43 +64,79 @@ export async function processScheduledPosts(): Promise<ProcessingResult> {
       result.processed++
 
       try {
-        // Validate LinkedIn connection
-        if (!scheduledPost.linkedinConnection) {
-          throw new Error('LinkedIn connection not found')
-        }
-
-        // Check if token is expired
-        if (scheduledPost.linkedinConnection.tokenExpiresAt < now) {
-          throw new Error('LinkedIn token expired. Please reconnect your account.')
-        }
-
-        // Get the image URL from the post
-        const imageUrl = scheduledPost.post?.imageUrl || scheduledPost.post?.imagePath
+        // Get the image URL from the post or scheduled post
+        const imageUrl = scheduledPost.imageUrl || scheduledPost.post?.imageUrl || scheduledPost.post?.imagePath
 
         if (!imageUrl) {
           throw new Error('No image found for this scheduled post')
         }
 
-        // Post to LinkedIn
-        const linkedInResult = await postToLinkedIn({
-          userId: scheduledPost.userId,
-          postText: scheduledPost.postText,
-          imageUrl,
-        })
+        // Route to appropriate platform
+        if (scheduledPost.platform === 'twitter') {
+          // Validate Twitter connection
+          if (!scheduledPost.twitterConnection) {
+            throw new Error('Twitter connection not found')
+          }
 
-        // Update scheduled post as published
-        await prisma.scheduledPost.update({
-          where: { id: scheduledPost.id },
-          data: {
-            status: 'published',
-            linkedinPostId: linkedInResult.postId,
-            publishedAt: new Date(),
-            errorMessage: null,
-          },
-        })
+          // Check if token is expired
+          if (scheduledPost.twitterConnection.expiresAt < now) {
+            throw new Error('Twitter token expired. Please reconnect your account.')
+          }
 
-        result.published++
-        console.log(`[ScheduledPosts] Published post ${scheduledPost.id}`)
+          // Post to Twitter
+          const twitterResult = await postToTwitter({
+            userId: scheduledPost.userId,
+            postText: scheduledPost.postText,
+            imageUrl,
+          })
+
+          // Update scheduled post as published
+          await prisma.scheduledPost.update({
+            where: { id: scheduledPost.id },
+            data: {
+              status: 'published',
+              twitterPostId: twitterResult.postId,
+              publishedAt: new Date(),
+              errorMessage: null,
+            },
+          })
+
+          result.published++
+          console.log(`[ScheduledPosts] Published Twitter post ${scheduledPost.id}`)
+
+        } else {
+          // Default to LinkedIn
+          // Validate LinkedIn connection
+          if (!scheduledPost.linkedinConnection) {
+            throw new Error('LinkedIn connection not found')
+          }
+
+          // Check if token is expired
+          if (scheduledPost.linkedinConnection.tokenExpiresAt < now) {
+            throw new Error('LinkedIn token expired. Please reconnect your account.')
+          }
+
+          // Post to LinkedIn
+          const linkedInResult = await postToLinkedIn({
+            userId: scheduledPost.userId,
+            postText: scheduledPost.postText,
+            imageUrl,
+          })
+
+          // Update scheduled post as published
+          await prisma.scheduledPost.update({
+            where: { id: scheduledPost.id },
+            data: {
+              status: 'published',
+              linkedinPostId: linkedInResult.postId,
+              publishedAt: new Date(),
+              errorMessage: null,
+            },
+          })
+
+          result.published++
+          console.log(`[ScheduledPosts] Published LinkedIn post ${scheduledPost.id}`)
+        }
 
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -228,6 +268,50 @@ async function postToLinkedIn(params: {
   }
 
   return { postId: result.postId || 'unknown' }
+}
+
+/**
+ * Post content to Twitter
+ * Uses the twitterService singleton to handle the posting
+ */
+async function postToTwitter(params: {
+  userId: string
+  postText: string
+  imageUrl: string
+}): Promise<{ postId: string }> {
+  // Import the Twitter service dynamically to avoid circular deps
+  const { twitterService } = await import('./twitterService')
+
+  // Convert image URL to buffer
+  let imageBuffer: Buffer
+
+  if (params.imageUrl.startsWith('data:image/')) {
+    // Handle base64 data URL
+    const base64Data = params.imageUrl.split(',')[1]
+    imageBuffer = Buffer.from(base64Data, 'base64')
+  } else if (params.imageUrl.startsWith('http')) {
+    // Handle HTTP URL - fetch and convert to buffer
+    const response = await fetch(params.imageUrl)
+    const arrayBuffer = await response.arrayBuffer()
+    imageBuffer = Buffer.from(arrayBuffer)
+  } else {
+    // Handle local file path
+    const fs = await import('fs/promises')
+    imageBuffer = await fs.readFile(params.imageUrl)
+  }
+
+  // Post to Twitter with image
+  const result = await twitterService.postWithImage(
+    params.userId,
+    params.postText,
+    imageBuffer
+  )
+
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to post to Twitter')
+  }
+
+  return { postId: result.tweetId || 'unknown' }
 }
 
 /**
