@@ -9,25 +9,36 @@ import {
   Spinner,
   Image,
   Center,
-  useToast,
   useDisclosure,
   Icon,
   Tooltip,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalCloseButton,
 } from '@chakra-ui/react'
+import toast from 'react-hot-toast'
 import {
   Download,
   ImageIcon,
   Linkedin,
+  Edit3,
+  Move,
 } from 'lucide-react'
 import LinkedInPostModal from './LinkedInPostModal'
 import LinkedInConnectButton from './LinkedInConnectButton'
+import TwitterConnectButton from './TwitterConnectButton'
+import ShareButtons from './ShareButtons'
+import PostEditor from './PostEditor'
 import MiniGame from './MiniGame'
+import { PlatformPreview } from './PlatformPreview'
+import { InteractiveCanvas } from './InteractiveCanvas'
 import { brandTheme } from '../theme/brand'
 import { createDefaultLogoService } from '../services/logoService'
-import { 
-  isBrowser, 
-  applyLogoToCanvas, 
-  createLogoOverlay 
+import {
+  isBrowser,
+  applyLogoToCanvas,
+  createLogoOverlay
 } from '../utils/client/canvasUtils'
 import { serviceContainer } from '../lib/api/ServiceContainer'
 import { globalErrorHandler } from '../lib/errors/GlobalErrorHandler'
@@ -54,9 +65,11 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
   const [showMiniGame, setShowMiniGame] = useState(false)
   const [logoSize, setLogoSize] = useState('medium')
   const [isLinkedInConnected, setIsLinkedInConnected] = useState(false)
-  const toast = useToast()
+  const [isTwitterConnected, setIsTwitterConnected] = useState(false)
   const { isAuthenticated, addPoints } = useAuth()
   const { isOpen: isLinkedInModalOpen, onOpen: openLinkedInModal, onClose: closeLinkedInModal } = useDisclosure()
+  const { isOpen: isPostEditorOpen, onOpen: openPostEditor, onClose: closePostEditor } = useDisclosure()
+  const { isOpen: isCanvasOpen, onOpen: openCanvas, onClose: closeCanvas } = useDisclosure()
 
   const sizeConfig = brandTheme.sizes.square
 
@@ -94,10 +107,10 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
 
   const handleAddLogo = async () => {
     setIsAddingLogo(true)
-    
+
     try {
       const imageService = serviceContainer.getImageGenerationService()
-      
+
       // Use the service layer for API calls
       const response = await imageService.addLogo({
         imageUrl: processedImageUrl || imageUrl,
@@ -109,25 +122,13 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
       }
 
       setProcessedImageUrl(response.data.imageUrl)
-      
-      toast({
-        title: 'Logo Replaced!',
-        description: 'The generated logo has been seamlessly replaced with the actual LakeB2B logo.',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      })
+
+      toast.success('Logo replaced with the actual LakeB2B logo!')
     } catch (error) {
       const errorMessage = globalErrorHandler.getUserMessage(error)
-      
-      toast({
-        title: 'Logo Replacement Failed',
-        description: errorMessage,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      })
-      
+
+      toast.error(`Logo replacement failed: ${errorMessage}`)
+
       // Log the error for debugging
       globalErrorHandler.handleError(error, {
         component: 'ImagePreview',
@@ -148,38 +149,18 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
         const basePoints = 10
         const performanceBonus = Math.min(score * 2, 50) // Up to 50 bonus points
         const totalPoints = basePoints + performanceBonus
-        
+
         await addPoints(totalPoints)
-        
-        toast({
-          title: `Game Complete! 🎉`,
-          description: `You earned ${totalPoints} points! (Base: ${basePoints} + Bonus: ${performanceBonus})`,
-          status: 'success',
-          duration: 4000,
-        })
+
+        toast.success(`Game Complete! You earned ${totalPoints} points!`, { icon: '🎉' })
       } catch (error) {
         console.error('Error awarding mini-game points:', error)
-        toast({
-          title: `Game Complete! 🎉`,
-          description: `You scored ${score} points while waiting!`,
-          status: 'success',
-          duration: 3000,
-        })
+        toast.success(`Game Complete! You scored ${score} points!`, { icon: '🎉' })
       }
     } else if (!isAuthenticated) {
-      toast({
-        title: `Game Complete! 🎉`,
-        description: `You scored ${score} points! Login to earn rewards!`,
-        status: 'success',
-        duration: 3000,
-      })
+      toast.success(`Game Complete! Score: ${score}. Login to earn rewards!`, { icon: '🎉' })
     } else {
-      toast({
-        title: `Game Complete! 🎉`,
-        description: `You scored ${score} points while waiting!`,
-        status: 'success',
-        duration: 3000,
-      })
+      toast.success(`Game Complete! You scored ${score} points!`, { icon: '🎉' })
     }
   }
 
@@ -190,9 +171,29 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
         <Heading size="md">Preview</Heading>
         {(imageUrl || processedImageUrl) && (
           <HStack spacing={2}>
+            <Tooltip label="Drag & resize logo interactively" placement="top">
+              <Button
+                size="sm"
+                leftIcon={<Icon as={Move} boxSize={4} />}
+                onClick={openCanvas}
+                colorScheme="orange"
+              >
+                Edit Logo
+              </Button>
+            </Tooltip>
+            <Tooltip label="Format and customize your post" placement="top">
+              <Button
+                size="sm"
+                leftIcon={<Icon as={Edit3} boxSize={4} />}
+                onClick={openPostEditor}
+                colorScheme="purple"
+              >
+                Format Post
+              </Button>
+            </Tooltip>
             {isAuthenticated && (
               <Tooltip
-                label={isLinkedInConnected ? "Post to LinkedIn" : "Connect LinkedIn to post"}
+                label={isLinkedInConnected ? "Post to LinkedIn" : "Share to LinkedIn (copy & download)"}
                 placement="top"
               >
                 <Button
@@ -200,9 +201,8 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
                   leftIcon={<Icon as={Linkedin} boxSize={4} />}
                   onClick={openLinkedInModal}
                   colorScheme="linkedin"
-                  isDisabled={!isLinkedInConnected}
                 >
-                  Post to LinkedIn
+                  {isLinkedInConnected ? 'Post to LinkedIn' : 'Share to LinkedIn'}
                 </Button>
               </Tooltip>
             )}
@@ -214,70 +214,87 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
             >
               Download
             </Button>
+            <ShareButtons
+              url={typeof window !== 'undefined' ? window.location.href : ''}
+              title="Check out this B2B marketing visual I created with LakeB2B!"
+              description="AI-powered social media content for B2B marketing"
+              imageUrl={processedImageUrl || imageUrl}
+              variant="compact"
+            />
           </HStack>
         )}
       </HStack>
 
-      <Box
-        position="relative"
-        width="full"
-        height="400px"
-        borderRadius="md"
-        overflow="hidden"
-        bg="gray.100"
+      <PlatformPreview
+        imageUrl={processedImageUrl || imageUrl}
+        defaultPlatform="raw"
       >
-        {/* Mini Game Overlay */}
-        <MiniGame
-          isVisible={showMiniGame}
-          onClose={() => setShowMiniGame(false)}
-          onComplete={handleMiniGameComplete}
-          generationProgress={generationProgress}
-        />
-        {isLoading ? (
-          <Center height="full">
-            <VStack spacing={4}>
-              <Spinner size="xl" color="purple.500" thickness="4px" />
-              <Text color="gray.600">Generating your image...</Text>
-            </VStack>
-          </Center>
-        ) : imageUrl || processedImageUrl ? (
-          <>
-            <Image
-              src={processedImageUrl || imageUrl}
-              alt="Generated social post"
-              objectFit="contain"
-              width="full"
-              height="full"
-            />
-            <canvas
-              ref={canvasRef}
-              style={{ display: 'none' }}
-              width={sizeConfig.width}
-              height={sizeConfig.height}
-            />
-          </>
-        ) : (
-          <Center height="full">
-            <VStack spacing={3} color="gray.400">
-              <ImageIcon size={48} />
-              <Text>Your generated image will appear here</Text>
-            </VStack>
-          </Center>
-        )}
-      </Box>
+        {/* Raw Preview Tab Content */}
+        <Box
+          position="relative"
+          width="full"
+          height="400px"
+          borderRadius="md"
+          overflow="hidden"
+          bg="gray.100"
+        >
+          {/* Mini Game Overlay */}
+          <MiniGame
+            isVisible={showMiniGame}
+            onClose={() => setShowMiniGame(false)}
+            onComplete={handleMiniGameComplete}
+            generationProgress={generationProgress}
+          />
+          {isLoading ? (
+            <Center height="full">
+              <VStack spacing={4}>
+                <Spinner size="xl" color="purple.500" thickness="4px" />
+                <Text color="gray.600">Generating your image...</Text>
+              </VStack>
+            </Center>
+          ) : imageUrl || processedImageUrl ? (
+            <>
+              <Image
+                src={processedImageUrl || imageUrl}
+                alt="Generated social post"
+                objectFit="contain"
+                width="full"
+                height="full"
+              />
+              <canvas
+                ref={canvasRef}
+                style={{ display: 'none' }}
+                width={sizeConfig.width}
+                height={sizeConfig.height}
+              />
+            </>
+          ) : (
+            <Center height="full">
+              <VStack spacing={3} color="gray.400">
+                <ImageIcon size={48} />
+                <Text>Your generated image will appear here</Text>
+              </VStack>
+            </Center>
+          )}
+        </Box>
+      </PlatformPreview>
 
       <Text fontSize="sm" color="gray.600" textAlign="center">
         Size: 1080 × 1080px (Square Format)
       </Text>
 
-      {/* LinkedIn Connection Status */}
+      {/* Social Connection Status */}
       {isAuthenticated && (
-        <Box width="full">
+        <VStack width="full" spacing={2}>
           <LinkedInConnectButton
             compact={true}
             onConnectionChange={setIsLinkedInConnected}
           />
-        </Box>
+          <TwitterConnectButton
+            variant="compact"
+            onConnectionChange={setIsTwitterConnected}
+          />
+        </VStack>
       )}
 
       {/* LinkedIn Post Modal */}
@@ -285,16 +302,43 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
         isOpen={isLinkedInModalOpen}
         onClose={closeLinkedInModal}
         imageUrl={processedImageUrl || imageUrl}
+        isConnected={isLinkedInConnected}
         onPostSuccess={(postUrl) => {
-          toast({
-            title: 'Posted to LinkedIn!',
-            description: 'Your image is now live on LinkedIn.',
-            status: 'success',
-            duration: 5000,
-            isClosable: true,
-          })
+          toast.success('Posted to LinkedIn! Your image is now live.')
         }}
       />
+
+      {/* Post Editor Modal */}
+      <Modal isOpen={isPostEditorOpen} onClose={closePostEditor} size="2xl">
+        <ModalOverlay />
+        <ModalContent maxW="700px" my={4}>
+          <ModalCloseButton zIndex={10} />
+          <PostEditor
+            imageUrl={processedImageUrl || imageUrl}
+            style={style}
+            onClose={closePostEditor}
+            isLinkedInConnected={isLinkedInConnected}
+          />
+        </ModalContent>
+      </Modal>
+
+      {/* Interactive Canvas Modal */}
+      <Modal isOpen={isCanvasOpen} onClose={closeCanvas} size="xl">
+        <ModalOverlay />
+        <ModalContent maxW="600px" my={4} p={4}>
+          <ModalCloseButton zIndex={10} />
+          <Heading size="md" mb={4}>Edit Logo Position</Heading>
+          <InteractiveCanvas
+            backgroundImageUrl={processedImageUrl || imageUrl}
+            logoUrl={style === 'newyork-cartoon' ? '/logos/LakeB2B Logo BW.png' : '/logos/LakeB2B Logo Square.png'}
+            onExport={(dataUrl) => {
+              setProcessedImageUrl(dataUrl)
+              closeCanvas()
+              toast.success('Changes applied! Your edited image is ready.')
+            }}
+          />
+        </ModalContent>
+      </Modal>
     </VStack>
   )
 }

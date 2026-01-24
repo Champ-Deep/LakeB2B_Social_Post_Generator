@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
   Box,
   Container,
@@ -11,17 +11,24 @@ import {
   Button,
   Text,
   Heading,
-  useToast,
   Spinner,
   Alert,
   AlertIcon,
+  Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
+  Icon,
 } from '@chakra-ui/react'
-import { ImageIcon, Download, Sparkles, User, LogIn } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { ImageIcon, Download, Sparkles, User, LogIn, Trash2, Save, Video, Image as ImageIconLucide } from 'lucide-react'
 import { PostFormData } from '../types/post'
 import { StyleId } from '../types/styles'
 import { brandTheme } from '../theme/brand'
 import ImagePreview from './ImagePreview'
-import StyleSelector from './StyleSelector'
+import VideoPreview from './VideoPreview'
+import { StyleMoodBoard } from './StyleMoodBoard'
 import UserProfile from './UserProfile'
 import AuthModal from './AuthModal'
 import RichTextEditor from './RichTextEditor'
@@ -32,7 +39,9 @@ import { useConnectionHealth } from '../hooks/useConnectionHealth'
 import { useAuth } from '../contexts/AuthContext'
 import { MemeFormatId } from '../types/styles'
 import MemeSelector from './MemeSelector'
+import { MagicFix } from './MagicFix'
 import { useGubey } from './Gubey'
+import { useDraftPersistence, DraftData } from '../hooks/useDraftPersistence'
 
 const PostGenerator: React.FC = () => {
   const [formData, setFormData] = useState<PostFormData>({
@@ -51,10 +60,52 @@ const PostGenerator: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [selectedMemeFormat, setSelectedMemeFormat] = useState<MemeFormatId>('auto')
   const [memeTexts, setMemeTexts] = useState<Record<string, string>>({})
-  const toast = useToast()
   const { isConnected, isChecking, retry } = useConnectionHealth()
   const { isAuthenticated, addPoints, incrementGeneration } = useAuth()
   const { dispatch: gubeyDispatch } = useGubey()
+
+  // Draft persistence for form recovery
+  const handleDraftRestored = useCallback((draft: DraftData) => {
+    setFormData({ message: draft.message, headline: draft.headline })
+    setSelectedStyle(draft.selectedStyle as StyleId)
+    setLogoPosition(draft.logoPosition)
+    setLogoSize(draft.logoSize)
+    setLogoOpacity(draft.logoOpacity)
+    setLogoRotation(draft.logoRotation)
+    setSelectedMemeFormat(draft.selectedMemeFormat as MemeFormatId)
+    setMemeTexts(draft.memeTexts)
+    toast.success('Draft restored! Your previous work has been recovered.', { icon: '📝' })
+  }, [])
+
+  const { saveDraft, clearDraft, hasDraft, lastSaved } = useDraftPersistence({
+    onDraftRestored: handleDraftRestored,
+  })
+
+  // Auto-save draft when form data changes
+  useEffect(() => {
+    saveDraft({
+      message: formData.message,
+      headline: formData.headline,
+      selectedStyle,
+      logoPosition,
+      logoSize,
+      logoOpacity,
+      logoRotation,
+      selectedMemeFormat,
+      memeTexts,
+    })
+  }, [
+    formData.message,
+    formData.headline,
+    selectedStyle,
+    logoPosition,
+    logoSize,
+    logoOpacity,
+    logoRotation,
+    selectedMemeFormat,
+    memeTexts,
+    saveDraft,
+  ])
 
   const isMemeStyleSelected = selectedStyle === 'meme'
 
@@ -62,7 +113,7 @@ const PostGenerator: React.FC = () => {
   const generateSmartMemeText = (format: MemeFormatId, message: string, headline: string) => {
     const combined = `${message} ${headline}`.toLowerCase()
     const newTexts: Record<string, string> = {}
-    
+
     switch (format) {
       case 'drake':
         if (combined.includes('old') || combined.includes('before')) {
@@ -73,30 +124,30 @@ const PostGenerator: React.FC = () => {
           newTexts.bottom = 'Our solution'
         }
         break
-        
+
       case 'distracted':
         newTexts.girlfriend = 'Current solution'
         newTexts.boyfriend = 'You'
         newTexts['other-woman'] = 'Our tempting offer'
         break
-        
+
       case 'woman-cat':
         newTexts.woman = 'Complaints about change'
         newTexts.cat = 'Us knowing it works'
         break
-        
+
       case 'change-mind':
         newTexts.sign = `${headline || 'Our approach'} is the best solution`
         break
     }
-    
+
     setMemeTexts(newTexts)
   }
 
   // Auto-select meme format based on content
   const selectBestMemeFormat = (message: string, headline: string): MemeFormatId => {
     const combined = `${message} ${headline}`.toLowerCase()
-    
+
     if (combined.includes('before') || combined.includes('after') || combined.includes('old') || combined.includes('new')) {
       return 'drake'
     } else if (combined.includes('frustrated') || combined.includes('complaint') || combined.includes('angry')) {
@@ -106,7 +157,7 @@ const PostGenerator: React.FC = () => {
     } else if (combined.includes('tempted') || combined.includes('versus') || combined.includes('option')) {
       return 'distracted'
     }
-    
+
     return 'drake' // Default fallback
   }
 
@@ -124,32 +175,20 @@ const PostGenerator: React.FC = () => {
     // Simple business context prompt - let style prompts handle all visual requirements
     const content = `Business theme: "${data.message}"`
     const headline = data.headline ? `Headline: "${data.headline}"` : ''
-    
+
     return `${content}. ${headline}`.trim()
   }
 
   const handleGenerate = async () => {
     // Check authentication first
     if (!isAuthenticated) {
-      toast({
-        title: 'Login Required',
-        description: 'Please log in to generate images',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      })
+      toast.error('Please log in to generate images')
       setShowAuthModal(true)
       return
     }
 
     if (!formData.message || !formData.headline) {
-      toast({
-        title: 'Required Fields Missing',
-        description: 'Please enter both message and headline for your social post',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      })
+      toast.error('Please enter both message and headline for your social post')
       return
     }
 
@@ -157,13 +196,7 @@ const PostGenerator: React.FC = () => {
     if (!isConnected) {
       const reconnected = await retry()
       if (!reconnected) {
-        toast({
-          title: 'Connection Required',
-          description: 'Please check your internet connection and ensure the server is running.',
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-        })
+        toast.error('Please check your internet connection and ensure the server is running.')
         return
       }
     }
@@ -185,11 +218,11 @@ const PostGenerator: React.FC = () => {
 
     try {
       let actualMemeFormat = selectedMemeFormat
-      
+
       // Auto-select best format if needed
       if (selectedStyle === 'meme' && selectedMemeFormat === 'auto') {
         actualMemeFormat = selectBestMemeFormat(formData.message, formData.headline)
-        
+
         // Generate smart text suggestions for auto-selected format
         if (formData.message || formData.headline) {
           generateSmartMemeText(actualMemeFormat, formData.message, formData.headline)
@@ -198,7 +231,7 @@ const PostGenerator: React.FC = () => {
 
       const prompt = generatePrompt(formData)
       const imageService = serviceContainer.getImageGenerationService()
-      
+
       // Use the service layer for API calls
       const response = await imageService.generateImage({
         prompt,
@@ -215,18 +248,12 @@ const PostGenerator: React.FC = () => {
         // Check if it's an authentication error (401 status or UNAUTHORIZED code)
         const error = response.error
         if (
-          response.statusCode === 401 || 
+          response.statusCode === 401 ||
           error?.code === 'UNAUTHORIZED' ||
           error?.message?.includes('Authentication') ||
           error?.message?.includes('UNAUTHORIZED')
         ) {
-          toast({
-            title: 'Authentication Required',
-            description: 'Your session has expired. Please log in again.',
-            status: 'error',
-            duration: 5000,
-            isClosable: true,
-          })
+          toast.error('Your session has expired. Please log in again.')
           setShowAuthModal(true)
           return
         }
@@ -246,40 +273,34 @@ const PostGenerator: React.FC = () => {
         await incrementGeneration()
       }
 
+      // Clear draft after successful generation
+      clearDraft()
+
       // Check for fallback - show warning if AI was unavailable
       const responseData = response.data
       if (responseData?.fallback) {
         setTimeout(() => {
-          toast({
-            title: 'AI Image Generation Unavailable',
-            description: responseData.fallbackReason || 'Using preview placeholder. The AI image generation service is temporarily unavailable. Please try again later.',
-            status: 'warning',
+          toast(responseData.fallbackReason || 'Using preview placeholder. AI temporarily unavailable.', {
+            icon: '⚠️',
             duration: 8000,
-            isClosable: true,
           })
         }, 500)
       } else {
         // Single consolidated success toast - wait for progress to complete
         setTimeout(() => {
           const successMessage = isAuthenticated
-            ? 'Image generated successfully! +10 points earned!'
+            ? 'Image generated! +10 points earned!'
             : 'Image generated successfully!'
 
           const memeInfo = selectedStyle === 'meme' && actualMemeFormat !== 'auto'
-            ? ` Used ${actualMemeFormat.replace('-', ' ')} meme format.`
+            ? ` (${actualMemeFormat.replace('-', ' ')} meme)`
             : ''
 
           const modelInfo = responseData?.modelUsed
-            ? ` (${responseData.modelUsed.split('-')[0]})`
+            ? ` - ${responseData.modelUsed.split('-')[0]}`
             : ''
 
-          toast({
-            title: 'Success!',
-            description: successMessage + memeInfo + modelInfo,
-            status: 'success',
-            duration: 3000,
-            isClosable: true,
-          })
+          toast.success(successMessage + memeInfo + modelInfo)
         }, 500) // Small delay to let progress complete
       }
     } catch (error) {
@@ -290,20 +311,14 @@ const PostGenerator: React.FC = () => {
 
       const errorMessage = globalErrorHandler.getUserMessage(error)
       setError(errorMessage)
-      
-      toast({
-        title: 'Generation Failed',
-        description: errorMessage,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      })
-      
+
+      toast.error(`Generation failed: ${errorMessage}`)
+
       // Log the error for debugging
-      globalErrorHandler.handleError(error, { 
+      globalErrorHandler.handleError(error, {
         component: 'PostGenerator',
         action: 'generateImage',
-        formData 
+        formData
       })
     } finally {
       setIsGenerating(false)
@@ -312,7 +327,7 @@ const PostGenerator: React.FC = () => {
 
   const handleStyleChange = (newStyle: string) => {
     setSelectedStyle(newStyle as StyleId)
-    
+
     // Adjust logo size based on style for better visibility
     if (newStyle === 'newyork-cartoon') {
       // Increase logo size for New York Cartoon style for better visibility
@@ -328,7 +343,7 @@ const PostGenerator: React.FC = () => {
       setLogoSize(35)
       setLogoOpacity(85)
     }
-    
+
     if (generatedImageUrl) {
       // Re-generate with new style
       handleGenerate()
@@ -341,7 +356,7 @@ const PostGenerator: React.FC = () => {
       const randomSuffix = Math.random().toString(36).substring(7)
       const originalMessage = formData.message
       setFormData(prev => ({ ...prev, message: `${originalMessage} (v${randomSuffix})` }))
-      
+
       setTimeout(() => {
         handleGenerate()
         setFormData(prev => ({ ...prev, message: originalMessage }))
@@ -367,13 +382,8 @@ const PostGenerator: React.FC = () => {
       message: topic.suggestion,
       headline: topic.title
     }))
-    
-    toast({
-      title: 'Topic Applied! 📝',
-      description: `Used trending topic: ${topic.title}`,
-      status: 'info',
-      duration: 3000,
-    })
+
+    toast.success(`Topic applied: ${topic.title}`)
   }
 
   return (
@@ -442,7 +452,18 @@ const PostGenerator: React.FC = () => {
                 />
               </FormControl>
 
-              <StyleSelector
+              {/* Magic Fix - AI-powered content improvement */}
+              <MagicFix
+                currentPrompt={formData.message}
+                currentHeadline={formData.headline}
+                style={selectedStyle}
+                onApplySuggestion={(prompt, headline) => {
+                  setFormData({ message: prompt, headline })
+                }}
+                disabled={isGenerating}
+              />
+
+              <StyleMoodBoard
                 selectedStyle={selectedStyle}
                 onStyleChange={setSelectedStyle}
                 disabled={isGenerating}
@@ -537,6 +558,47 @@ const PostGenerator: React.FC = () => {
                 </Text>
               </FormControl>
 
+              {/* Draft status indicator */}
+              {hasDraft && (
+                <HStack
+                  w="full"
+                  justify="space-between"
+                  p={2}
+                  bg="green.50"
+                  borderRadius="md"
+                  fontSize="xs"
+                  color="green.700"
+                >
+                  <HStack>
+                    <Save size={14} />
+                    <Text>
+                      Draft saved {lastSaved ? new Date(lastSaved).toLocaleTimeString() : ''}
+                    </Text>
+                  </HStack>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    colorScheme="red"
+                    leftIcon={<Trash2 size={12} />}
+                    onClick={() => {
+                      clearDraft()
+                      setFormData({ message: '', headline: '' })
+                      setSelectedStyle('isometric')
+                      setLogoPosition('bottom-left')
+                      setLogoSize(35)
+                      setLogoOpacity(85)
+                      setLogoRotation(0)
+                      setSelectedMemeFormat('auto')
+                      setMemeTexts({})
+                      toast.success('Draft cleared')
+                    }}
+                    isDisabled={isGenerating}
+                  >
+                    Clear
+                  </Button>
+                </HStack>
+              )}
+
               <Button
                 variant="gradient"
                 size="lg"
@@ -561,20 +623,50 @@ const PostGenerator: React.FC = () => {
 
           {/* Preview Panel */}
           <Box flex={1}>
-            <ImagePreview
-              imageUrl={generatedImageUrl}
-              isLoading={isGenerating}
-              style={selectedStyle}
-              logoPosition={logoPosition}
-              generationProgress={generationProgress}
-            />
+            <Tabs isFitted variant="soft-rounded" colorScheme="purple">
+              <TabList mb="1em" bg="white" p={1} borderRadius="xl" boxShadow="sm">
+                <Tab borderRadius="lg">
+                  <HStack spacing={2}>
+                    <Icon as={ImageIconLucide} size={18} />
+                    <Text fontSize="sm" fontWeight="bold">Image Preview</Text>
+                  </HStack>
+                </Tab>
+                <Tab borderRadius="lg">
+                  <HStack spacing={2}>
+                    <Icon as={Video} size={18} />
+                    <Text fontSize="sm" fontWeight="bold">Video Preview</Text>
+                  </HStack>
+                </Tab>
+              </TabList>
+
+              <TabPanels>
+                <TabPanel p={0}>
+                  <ImagePreview
+                    imageUrl={generatedImageUrl}
+                    isLoading={isGenerating}
+                    style={selectedStyle}
+                    logoPosition={logoPosition}
+                    generationProgress={generationProgress}
+                  />
+                </TabPanel>
+                <TabPanel p={0}>
+                  <VideoPreview
+                    title={formData.headline || 'LakeB2B Social Post'}
+                    subtitle={formData.message || 'Empowering your brand with AI.'}
+                    imageUrl={generatedImageUrl}
+                    logoUrl="/logos/lakeb2b-logo-square.png"
+                    isLoading={isGenerating}
+                  />
+                </TabPanel>
+              </TabPanels>
+            </Tabs>
           </Box>
         </HStack>
-        
+
         {/* Authentication Modal */}
-        <AuthModal 
-          isOpen={showAuthModal} 
-          onClose={() => setShowAuthModal(false)} 
+        <AuthModal
+          isOpen={showAuthModal}
+          onClose={() => setShowAuthModal(false)}
         />
       </VStack>
     </Container>

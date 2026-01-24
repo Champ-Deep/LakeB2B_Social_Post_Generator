@@ -1,0 +1,251 @@
+// LakeB2B Social Post Creator - Prisma Schema
+// PostgreSQL database with Better-Auth integration (Supabase)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // For Supabase connection pooling
+}
+
+// ============================================
+// Better-Auth Required Tables
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  name          String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations to Better-Auth tables
+  sessions      Session[]
+  accounts      Account[]
+
+  // Relations to app tables
+  profile             UserProfile?
+  posts               Post[]
+  postLikes           PostLike[]
+  postViews           PostView[]
+  linkedInConnection  LinkedInConnection?
+  twitterConnection   TwitterConnection?
+  scheduledPosts      ScheduledPost[]
+  pointsHistory       PointsHistory[]
+  gameSessions        GameSession[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+// ============================================
+// Application Tables
+// ============================================
+
+model UserProfile {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  totalPoints           Int       @default(0)
+  level                 Int       @default(1)
+  generationCount       Int       @default(0)
+  achievements          String    @default("[]") // JSON array stored as string
+  currentStreak         Int       @default(0)
+  longestStreak         Int       @default(0)
+  lastActivityDate      DateTime?
+  weeklyPoints          Int       @default(0)
+  weeklyGenerationCount Int       @default(0)
+  weekStartDate         DateTime?
+  streakBonusMultiplier Float     @default(1.0)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Post {
+  id           String   @id @default(cuid())
+  userId       String
+  imagePath    String   // Local file path
+  imageUrl     String?  // Optional URL for backward compatibility
+  prompt       String
+  headline     String?
+  style        String
+  memeFormat   String?
+  size         String?
+  logoPosition String?
+  logoSize     Float?
+  logoOpacity  Float?
+  logoRotation Float?
+  isPublic     Boolean  @default(false)
+  likesCount   Int      @default(0)
+  viewsCount   Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes         PostLike[]
+  views         PostView[]
+  scheduledPost ScheduledPost?
+
+  @@index([userId])
+  @@index([isPublic, createdAt])
+  @@index([style])
+  @@index([likesCount])
+}
+
+model PostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+}
+
+model PostView {
+  id       String   @id @default(cuid())
+  postId   String
+  userId   String?
+  viewedAt DateTime @default(now())
+
+  post Post  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([postId])
+}
+
+model LinkedInConnection {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  linkedinId      String   @unique
+  accessToken     String   // Encrypted
+  refreshToken    String?  // Encrypted
+  tokenExpiresAt  DateTime
+  profileName     String?
+  profileUrl      String?
+  profileImageUrl String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledPosts ScheduledPost[]
+}
+
+model TwitterConnection {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  twitterUserId   String   @unique
+  accessToken     String   // Stored securely
+  refreshToken    String?
+  expiresAt       DateTime
+  username        String
+  profileImageUrl String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ScheduledPost {
+  id                   String    @id @default(cuid())
+  userId               String
+  postId               String?   @unique
+  linkedinConnectionId String?
+  postText             String
+  scheduledFor         DateTime
+  status               String    @default("pending") // pending, published, failed
+  linkedinPostId       String?
+  errorMessage         String?
+  createdAt            DateTime  @default(now())
+  publishedAt          DateTime?
+
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post               Post?               @relation(fields: [postId], references: [id], onDelete: SetNull)
+  linkedinConnection LinkedInConnection? @relation(fields: [linkedinConnectionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status, scheduledFor])
+}
+
+model PointsHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  pointsChange Int
+  reason       String
+  balanceAfter Int
+  metadata     String   @default("{}") // JSON stored as string
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model GameSession {
+  id                    String   @id @default(cuid())
+  userId                String
+  gameType              String
+  score                 Int
+  timeRemaining         Int?
+  wasGenerationComplete Boolean  @default(false)
+  createdAt             DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([gameType])
+}
