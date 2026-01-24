@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import {
   Box,
   VStack,
@@ -34,7 +35,12 @@ import ShareButtons from './ShareButtons'
 import PostEditor from './PostEditor'
 import MiniGame from './MiniGame'
 import { PlatformPreview } from './PlatformPreview'
-import { InteractiveCanvas } from './InteractiveCanvas'
+
+// Dynamic import with SSR disabled - react-konva/konva require canvas on server
+const InteractiveCanvas = dynamic(
+  () => import('./InteractiveCanvas').then(mod => mod.InteractiveCanvas),
+  { ssr: false, loading: () => <Spinner size="lg" color="purple.500" /> }
+)
 import { brandTheme } from '../theme/brand'
 import { createDefaultLogoService } from '../services/logoService'
 import {
