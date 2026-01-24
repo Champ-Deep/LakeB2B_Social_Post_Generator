@@ -1,0 +1,39 @@
+# LakeB2B Social Post Creator - Development Docker Compose
+# Use: docker compose -f docker-compose.dev.yml up
+
+version: '3.8'
+
+services:
+  # ============================================
+  # Redis (for local development with queues)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: lakeb2b-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - lakeb2b-redis-dev:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Redis Commander (Optional - Redis GUI)
+  # ============================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: lakeb2b-redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+
+volumes:
+  lakeb2b-redis-dev:
+    driver: local

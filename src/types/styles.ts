@@ -8,6 +8,7 @@ export interface StyleOption {
   memeFormat?: 'distracted-boyfriend' | 'woman-yelling-cat' | 'expanding-brain' | 'change-my-mind' | 'this-is-fine' | 'surprised-pikachu'
   requiresTextOverlay?: boolean
   visibility?: 'public' | 'internal'
+  previewImage?: string  // Path to preview thumbnail for mood board
 }
 
 export const STYLE_OPTIONS: StyleOption[] = [
@@ -15,6 +16,7 @@ export const STYLE_OPTIONS: StyleOption[] = [
     id: 'isometric',
     name: 'Isometric',
     description: 'Modern 3D isometric illustration style',
+    previewImage: '/style-previews/isometric.svg',
     systemPrompt: `Generate a professional isometric 3D business illustration:
 
 VISUAL STYLE: Clean isometric perspective with modern 3D graphics, sharp geometric shapes, and professional polish
@@ -53,6 +55,7 @@ IMPORTANT:
     id: 'infographic',
     name: 'Infographic',
     description: 'Data-driven visual storytelling with charts and statistics',
+    previewImage: '/style-previews/infographic.svg',
     systemPrompt: `Generate a professional B2B infographic illustration with data visualization elements:
 
 VISUAL STYLE: Modern, clean infographic design with 3D depth and professional polish
@@ -92,6 +95,7 @@ IMPORTANT:
     id: 'newyork-cartoon',
     name: 'New York Cartoon B&W',
     description: 'Black and white cartoon illustration with urban flair',
+    previewImage: '/style-previews/newyork-cartoon.svg',
     systemPrompt: `Generate a black and white editorial cartoon illustration with New York urban aesthetic:
 
 VISUAL STYLE: Bold line art cartoon style with hand-drawn appearance, reminiscent of New Yorker magazine illustrations
@@ -133,6 +137,7 @@ IMPORTANT:
     id: 'minimalist-linkedin',
     name: 'Minimalist LinkedIn',
     description: 'Clean, professional LinkedIn-optimized style',
+    previewImage: '/style-previews/minimalist-linkedin.svg',
     systemPrompt: `Generate an ultra-minimalist professional illustration optimized for LinkedIn:
 
 VISUAL STYLE: Premium minimalist design with sophisticated visual hierarchy and zen-like simplicity
@@ -172,6 +177,7 @@ IMPORTANT:
     id: 'meme',
     name: 'Meme',
     description: 'Internet meme templates with smart AI text suggestions',
+    previewImage: '/style-previews/meme.svg',
     systemPrompt: `Use real meme template images. This will be replaced with specific meme template based on user selection.`,
     category: 'creative',
     platform: ['linkedin', 'twitter', 'instagram', 'facebook'],

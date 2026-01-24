@@ -1,10 +1,12 @@
 /**
  * GlobalErrorHandler - Centralized error handling for the application
  * Handles both client-side and server-side errors
+ * Integrates with Sentry for error tracking
  */
 
 import { logger } from '../../utils/logging/logger'
 import { ErrorUtils, AppError } from './AppErrors'
+import * as Sentry from '@sentry/nextjs'
 
 export interface ErrorHandler {
   (error: Error, context?: Record<string, any>): void
@@ -91,6 +93,20 @@ export class GlobalErrorHandler {
       logger.error('Unexpected error', {
         error: JSON.stringify(appError.toJSON()),
         context: JSON.stringify(context)
+      })
+    }
+
+    // Report to Sentry (only non-operational errors in production)
+    if (process.env.NEXT_PUBLIC_SENTRY_DSN && !ErrorUtils.isOperationalError(appError)) {
+      Sentry.captureException(appError, {
+        extra: {
+          ...context,
+          errorCode: appError.code,
+          isOperational: appError.isOperational,
+        },
+        tags: {
+          errorType: context?.type || 'unknown',
+        },
       })
     }
 

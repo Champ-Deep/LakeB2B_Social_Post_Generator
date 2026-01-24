@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Modal,
   ModalOverlay,
@@ -32,11 +32,11 @@ import {
   Divider,
   Button
 } from '@chakra-ui/react'
-import { 
-  Trophy, 
-  Medal, 
-  Award, 
-  TrendingUp, 
+import {
+  Trophy,
+  Medal,
+  Award,
+  TrendingUp,
   Image as ImageIcon,
   Sparkles,
   Target,
@@ -44,19 +44,81 @@ import {
   Calendar,
   Users,
   BarChart3,
-  Download
+  Download,
+  Flame,
+  GalleryHorizontal,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import Leaderboard from './Leaderboard'
+import StreakDisplay from './StreakDisplay'
+import PointsHistory from './PointsHistory'
+import SocialSpace from './SocialSpace'
 
 interface UserDashboardProps {
   isOpen: boolean
   onClose: () => void
 }
 
+interface PointsHistoryEntry {
+  id: string
+  points_change: number
+  reason: string
+  balance_after: number
+  metadata?: Record<string, unknown>
+  created_at: string
+}
+
+interface UserStatsData {
+  currentStreak: number
+  longestStreak: number
+  streakBonusMultiplier: number
+  lastActivityDate: string | null
+  weeklyPoints: number
+  weeklyGenerationCount: number
+  gamesPlayed: number
+}
+
 const UserDashboard: React.FC<UserDashboardProps> = ({ isOpen, onClose }) => {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState(0)
+  const [pointsHistory, setPointsHistory] = useState<PointsHistoryEntry[]>([])
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [userStats, setUserStats] = useState<UserStatsData | null>(null)
+
+  // Fetch user stats and points history when modal opens
+  useEffect(() => {
+    if (isOpen && user) {
+      // Fetch stats
+      fetch('/api/user/stats')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.stats) {
+            setUserStats({
+              currentStreak: data.stats.currentStreak || 0,
+              longestStreak: data.stats.longestStreak || 0,
+              streakBonusMultiplier: data.stats.streakBonusMultiplier || 1.0,
+              lastActivityDate: data.stats.lastActivityDate,
+              weeklyPoints: data.stats.weeklyPoints || 0,
+              weeklyGenerationCount: data.stats.weeklyGenerationCount || 0,
+              gamesPlayed: data.stats.gamesPlayed || 0,
+            })
+          }
+        })
+        .catch(err => console.error('Failed to fetch user stats:', err))
+
+      // Fetch points history
+      setIsLoadingHistory(true)
+      fetch('/api/user/points-history?limit=20')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.entries) {
+            setPointsHistory(data.entries)
+          }
+        })
+        .catch(err => console.error('Failed to fetch points history:', err))
+        .finally(() => setIsLoadingHistory(false))
+    }
+  }, [isOpen, user])
 
   if (!user) return null
 
@@ -70,12 +132,12 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ isOpen, onClose }) => {
   const nextLevelPoints = level * 100
   const progressToNextLevel = ((totalPoints - currentLevelPoints) / (nextLevelPoints - currentLevelPoints)) * 100
 
-  // Mock additional stats (in production, these would come from API)
+  // Use real stats if available, otherwise fall back to defaults
   const weeklyStats = {
-    postsGenerated: 12,
-    pointsEarned: 230,
-    gamesPlayed: 8,
-    streakDays: 5
+    postsGenerated: userStats?.weeklyGenerationCount || 0,
+    pointsEarned: userStats?.weeklyPoints || 0,
+    gamesPlayed: userStats?.gamesPlayed || 0,
+    streakDays: userStats?.currentStreak || 0
   }
 
   const availableAchievements = [
@@ -224,6 +286,12 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ isOpen, onClose }) => {
                     <Text>Statistics</Text>
                   </HStack>
                 </Tab>
+                <Tab>
+                  <HStack spacing={2}>
+                    <GalleryHorizontal size={16} />
+                    <Text>Gallery</Text>
+                  </HStack>
+                </Tab>
               </TabList>
 
               <TabPanels>
@@ -291,49 +359,93 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ isOpen, onClose }) => {
 
                 {/* Statistics Tab */}
                 <TabPanel px={0}>
-                  <VStack spacing={6} align="stretch">
-                    <Heading size="md">Weekly Performance</Heading>
-                    
-                    <StatGroup>
-                      <Stat>
-                        <StatLabel>Posts Generated</StatLabel>
-                        <StatNumber>{weeklyStats.postsGenerated}</StatNumber>
-                        <StatHelpText>This week</StatHelpText>
-                      </Stat>
-                      <Stat>
-                        <StatLabel>Points Earned</StatLabel>
-                        <StatNumber>{weeklyStats.pointsEarned}</StatNumber>
-                        <StatHelpText>This week</StatHelpText>
-                      </Stat>
-                      <Stat>
-                        <StatLabel>Games Played</StatLabel>
-                        <StatNumber>{weeklyStats.gamesPlayed}</StatNumber>
-                        <StatHelpText>This week</StatHelpText>
-                      </Stat>
-                    </StatGroup>
+                  <Grid templateColumns={{ base: "1fr", lg: "1fr 1fr" }} gap={6}>
+                    {/* Left Column - Streak & Weekly Stats */}
+                    <VStack spacing={6} align="stretch">
+                      {/* Streak Display */}
+                      {userStats && (
+                        <StreakDisplay
+                          currentStreak={userStats.currentStreak}
+                          longestStreak={userStats.longestStreak}
+                          streakBonusMultiplier={userStats.streakBonusMultiplier}
+                          lastActivityDate={userStats.lastActivityDate}
+                        />
+                      )}
 
-                    <Divider />
+                      {/* Weekly Performance */}
+                      <Box
+                        bg="white"
+                        borderRadius="lg"
+                        p={4}
+                        boxShadow="sm"
+                        border="1px solid"
+                        borderColor="gray.200"
+                      >
+                        <HStack mb={4}>
+                          <Icon as={Calendar} color="blue.500" boxSize={5} />
+                          <Text fontWeight="bold" fontSize="lg">Weekly Performance</Text>
+                        </HStack>
+                        <StatGroup>
+                          <Stat>
+                            <StatLabel>Posts Generated</StatLabel>
+                            <StatNumber color="blue.600">{weeklyStats.postsGenerated}</StatNumber>
+                            <StatHelpText>This week</StatHelpText>
+                          </Stat>
+                          <Stat>
+                            <StatLabel>Points Earned</StatLabel>
+                            <StatNumber color="green.600">{weeklyStats.pointsEarned}</StatNumber>
+                            <StatHelpText>This week</StatHelpText>
+                          </Stat>
+                        </StatGroup>
+                      </Box>
 
-                    <Heading size="md">All Time Records</Heading>
-                    
-                    <StatGroup>
-                      <Stat>
-                        <StatLabel>Total Posts</StatLabel>
-                        <StatNumber>{generationCount}</StatNumber>
-                        <StatHelpText>Since joining</StatHelpText>
-                      </Stat>
-                      <Stat>
-                        <StatLabel>Total Points</StatLabel>
-                        <StatNumber>{totalPoints.toLocaleString()}</StatNumber>
-                        <StatHelpText>All time</StatHelpText>
-                      </Stat>
-                      <Stat>
-                        <StatLabel>Current Level</StatLabel>
-                        <StatNumber>{level}</StatNumber>
-                        <StatHelpText>Achievement level</StatHelpText>
-                      </Stat>
-                    </StatGroup>
-                  </VStack>
+                      {/* All Time Records */}
+                      <Box
+                        bg="white"
+                        borderRadius="lg"
+                        p={4}
+                        boxShadow="sm"
+                        border="1px solid"
+                        borderColor="gray.200"
+                      >
+                        <HStack mb={4}>
+                          <Icon as={Trophy} color="yellow.500" boxSize={5} />
+                          <Text fontWeight="bold" fontSize="lg">All Time Records</Text>
+                        </HStack>
+                        <StatGroup>
+                          <Stat>
+                            <StatLabel>Total Posts</StatLabel>
+                            <StatNumber>{generationCount}</StatNumber>
+                            <StatHelpText>Since joining</StatHelpText>
+                          </Stat>
+                          <Stat>
+                            <StatLabel>Total Points</StatLabel>
+                            <StatNumber>{totalPoints.toLocaleString()}</StatNumber>
+                            <StatHelpText>All time</StatHelpText>
+                          </Stat>
+                          <Stat>
+                            <StatLabel>Current Level</StatLabel>
+                            <StatNumber>{level}</StatNumber>
+                            <StatHelpText>Achievement level</StatHelpText>
+                          </Stat>
+                        </StatGroup>
+                      </Box>
+                    </VStack>
+
+                    {/* Right Column - Points History */}
+                    <Box>
+                      <PointsHistory
+                        entries={pointsHistory}
+                        isLoading={isLoadingHistory}
+                        maxEntries={15}
+                      />
+                    </Box>
+                  </Grid>
+                </TabPanel>
+
+                {/* Gallery Tab */}
+                <TabPanel px={0}>
+                  <SocialSpace maxPosts={50} />
                 </TabPanel>
               </TabPanels>
             </Tabs>

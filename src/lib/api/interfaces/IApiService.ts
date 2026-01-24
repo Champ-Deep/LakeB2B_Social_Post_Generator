@@ -52,6 +52,9 @@ export interface GenerateImageResult {
   fallbackReason?: string
   modelUsed?: string
   modelsAttempted?: string[]
+  // Analytics fields
+  duration?: number
+  promptOptimized?: boolean
 }
 
 export interface AddLogoParams {

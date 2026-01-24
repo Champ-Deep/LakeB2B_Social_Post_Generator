@@ -1,0 +1,73 @@
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+.next
+out
+build
+dist
+
+# Testing
+coverage
+.nyc_output
+
+# IDE and editors
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files (secrets)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+*.md
+docs/
+
+# Local data
+data/
+uploads/
+*.db
+*.db-journal
+
+# Logs
+logs
+*.log
+
+# Tests
+tests/
+__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+playwright-report/
+test-results/
+
+# Claude configuration
+.claude/
+
+# Misc
+*.bak
+*.tmp
+*.temp

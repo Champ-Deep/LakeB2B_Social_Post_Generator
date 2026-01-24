@@ -1,9 +1,15 @@
+/**
+ * Leaderboard API
+ *
+ * Retrieves real-time leaderboard data from SQLite via Prisma.
+ * Provides all-time and weekly rankings.
+ */
+
 import type { NextApiRequest, NextApiResponse } from 'next'
-import jwt from 'jsonwebtoken'
+import { getSessionFromRequest } from '../../../lib/auth/middleware'
+import { prisma } from '../../../lib/db/client'
+import type { UserProfile } from '@prisma/client'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'lakeb2b-secret-key-2024'
-
-// Mock leaderboard data - in production, this would come from database
 interface LeaderboardEntry {
   userId: string
   name: string
@@ -12,6 +18,7 @@ interface LeaderboardEntry {
   weeklyPoints: number
   level: number
   generationCount: number
+  currentStreak: number
   rank: number
 }
 
@@ -25,77 +32,6 @@ interface LeaderboardResponse {
   error?: string
 }
 
-// Mock data for demonstration
-const mockLeaderboardData: Omit<LeaderboardEntry, 'rank'>[] = [
-  {
-    userId: 'lakeb2b-john.doe',
-    name: 'John Doe',
-    email: 'john.doe@lakeb2b.com',
-    totalPoints: 1250,
-    weeklyPoints: 320,
-    level: 13,
-    generationCount: 45
-  },
-  {
-    userId: 'lakeb2b-jane.smith',
-    name: 'Jane Smith', 
-    email: 'jane.smith@lakeb2b.com',
-    totalPoints: 950,
-    weeklyPoints: 280,
-    level: 10,
-    generationCount: 38
-  },
-  {
-    userId: 'lakeb2b-mike.johnson',
-    name: 'Mike Johnson',
-    email: 'mike.johnson@lakeb2b.com',
-    totalPoints: 780,
-    weeklyPoints: 150,
-    level: 8,
-    generationCount: 29
-  },
-  {
-    userId: 'lakeb2b-sarah.wilson',
-    name: 'Sarah Wilson',
-    email: 'sarah.wilson@lakeb2b.com',
-    totalPoints: 650,
-    weeklyPoints: 220,
-    level: 7,
-    generationCount: 24
-  },
-  {
-    userId: 'lakeb2b-demo',
-    name: 'LakeB2B Demo',
-    email: 'demo@lakeb2b.com',
-    totalPoints: 250,
-    weeklyPoints: 120,
-    level: 3,
-    generationCount: 15
-  }
-]
-
-function verifyUser(req: NextApiRequest): { userId: string; email: string } | null {
-  try {
-    const token = req.cookies.lakeb2b_token || 
-                  (req.headers.authorization?.startsWith('Bearer ') ? 
-                   req.headers.authorization.substring(7) : null)
-    
-    if (!token) return null
-    
-    const decoded = jwt.verify(token, JWT_SECRET) as any
-    return { userId: decoded.userId, email: decoded.email }
-  } catch {
-    return null
-  }
-}
-
-function addRanks(entries: Omit<LeaderboardEntry, 'rank'>[]): LeaderboardEntry[] {
-  return entries.map((entry, index) => ({
-    ...entry,
-    rank: index + 1
-  }))
-}
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<LeaderboardResponse>
@@ -107,35 +43,102 @@ export default async function handler(
     })
   }
 
-  const user = verifyUser(req)
-  if (!user) {
+  const authResult = await getSessionFromRequest(req)
+  if (!authResult.authenticated || !authResult.user) {
     return res.status(401).json({
       success: false,
       error: 'Unauthorized'
     })
   }
 
-  try {
-    // Sort by total points for all-time leaderboard
-    const allTimeEntries = [...mockLeaderboardData]
-      .sort((a, b) => b.totalPoints - a.totalPoints)
-    const allTimeLeaderboard = addRanks(allTimeEntries)
+  const userId = authResult.user.id
 
-    // Sort by weekly points for weekly leaderboard  
-    const weeklyEntries = [...mockLeaderboardData]
-      .sort((a, b) => b.weeklyPoints - a.weeklyPoints)
-    const weeklyLeaderboard = addRanks(weeklyEntries)
+  try {
+    // Fetch top 20 users by total points (all-time)
+    const allTimeUsers = await prisma.userProfile.findMany({
+      include: {
+        user: {
+          select: { email: true, name: true },
+        },
+      },
+      orderBy: { totalPoints: 'desc' },
+      take: 20,
+    })
+
+    // Fetch top 20 users by weekly points
+    const weeklyUsers = await prisma.userProfile.findMany({
+      include: {
+        user: {
+          select: { email: true, name: true },
+        },
+      },
+      orderBy: { weeklyPoints: 'desc' },
+      take: 20,
+    })
+
+    // Map to leaderboard entries with ranks
+    const mapToLeaderboardEntry = (
+      profile: UserProfile & { user: { email: string; name: string | null } },
+      rank: number
+    ): LeaderboardEntry => ({
+      userId: profile.userId,
+      name: profile.user.name || profile.user.email?.split('@')[0] || 'Anonymous',
+      email: profile.user.email || '',
+      totalPoints: profile.totalPoints,
+      weeklyPoints: profile.weeklyPoints,
+      level: profile.level,
+      generationCount: profile.generationCount,
+      currentStreak: profile.currentStreak,
+      rank
+    })
+
+    const allTimeLeaderboard: LeaderboardEntry[] = allTimeUsers.map(
+      (profile, index) => mapToLeaderboardEntry(profile, index + 1)
+    )
+
+    const weeklyLeaderboard: LeaderboardEntry[] = weeklyUsers.map(
+      (profile, index) => mapToLeaderboardEntry(profile, index + 1)
+    )
 
     // Find current user in leaderboards
-    const currentUserAllTime = allTimeLeaderboard.find(entry => entry.userId === user.userId)
-    const currentUserWeekly = weeklyLeaderboard.find(entry => entry.userId === user.userId)
+    let currentUserEntry: LeaderboardEntry | undefined
+
+    // Check all-time ranking first
+    const allTimeIndex = allTimeLeaderboard.findIndex(e => e.userId === userId)
+    if (allTimeIndex !== -1) {
+      currentUserEntry = allTimeLeaderboard[allTimeIndex]
+    } else {
+      // User not in top 20, fetch their profile separately
+      const currentUserProfile = await prisma.userProfile.findUnique({
+        where: { userId },
+        include: {
+          user: {
+            select: { email: true, name: true },
+          },
+        },
+      })
+
+      if (currentUserProfile) {
+        // Calculate approximate rank by counting users with more points
+        const rankCount = await prisma.userProfile.count({
+          where: {
+            totalPoints: { gt: currentUserProfile.totalPoints },
+          },
+        })
+
+        currentUserEntry = mapToLeaderboardEntry(
+          currentUserProfile,
+          rankCount + 1
+        )
+      }
+    }
 
     return res.status(200).json({
       success: true,
       leaderboard: {
-        allTime: allTimeLeaderboard.slice(0, 10), // Top 10
-        weekly: weeklyLeaderboard.slice(0, 10), // Top 10
-        currentUser: currentUserAllTime || currentUserWeekly
+        allTime: allTimeLeaderboard.slice(0, 10),
+        weekly: weeklyLeaderboard.slice(0, 10),
+        currentUser: currentUserEntry
       }
     })
   } catch (error) {

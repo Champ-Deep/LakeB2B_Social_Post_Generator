@@ -1,0 +1,36 @@
+# LakeB2B Social Post Creator - Worker Dockerfile
+# Runs the BullMQ job processor
+
+FROM node:20-alpine
+
+# Install dependencies
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install dependencies
+RUN npm ci --legacy-peer-deps --production
+
+# Copy application code
+COPY . .
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Set environment
+ENV NODE_ENV=production
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 worker
+
+# Create data directory
+RUN mkdir -p /app/data /app/uploads && chown -R worker:nodejs /app/data /app/uploads
+
+USER worker
+
+# Start the worker
+CMD ["node", "-r", "ts-node/register", "src/lib/queue/workers/imageGenerationWorker.ts"]

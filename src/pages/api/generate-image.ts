@@ -2,7 +2,9 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import axios, { AxiosError } from 'axios'
 import { addLogoOverlay, createPlaceholderImage, createMemeFromTemplate } from '../../utils/server/imageProcessor'
 import { rateLimitCheck, applyRateLimitHeaders, RATE_LIMITS } from '../../lib/rateLimit'
-import { getSessionFromRequest } from '../../lib/supabase/auth'
+import { getSessionFromRequest } from '../../lib/auth/middleware'
+import { validateImageGenerationRequest, type ImageGenerationInput } from '../../lib/schemas'
+import { optimizeImagePrompt, isLangChainConfigured } from '../../lib/langchain'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
@@ -15,19 +17,14 @@ interface ImageModel {
 
 const IMAGE_MODELS: ImageModel[] = [
   {
-    name: 'gemini-3-pro-image-preview',  // Nano Banana Pro (PRIMARY)
+    name: 'gemini-2.5-flash-image',      // Gemini 2.5 Flash Image (PRIMARY - Verified)
     endpoint: 'generateContent',
     supportsImageConfig: true
   },
   {
-    name: 'gemini-2.5-flash-image',      // Nano Banana (fallback 1)
+    name: 'gemini-3-pro-image-preview',  // Gemini 3 Pro Image Preview (Fallback)
     endpoint: 'generateContent',
     supportsImageConfig: true
-  },
-  {
-    name: 'imagen-3.0-generate-002',     // Imagen 3 (fallback 2)
-    endpoint: 'predict',
-    supportsImageConfig: false
   }
 ]
 
@@ -200,7 +197,7 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  // Check authentication using Supabase
+  // Check authentication
   const authResult = await getSessionFromRequest(req)
   if (!authResult.authenticated) {
     return res.status(401).json({
@@ -227,78 +224,29 @@ export default async function handler(
   }
 
   try {
-    const { 
-      prompt, 
-      style = 'isometric', 
-      position = 'bottom-left',
-      logoSize = 35,
-      logoOpacity = 85,
-      logoRotation = 0,
+    // Start timing for analytics
+    const startTime = Date.now()
+
+    // Validate request body with Zod schema
+    const validationResult = validateImageGenerationRequest(req.body)
+
+    if (!validationResult.success) {
+      return res.status(400).json(validationResult.error)
+    }
+
+    const {
+      prompt,
+      style,
+      position,
+      logoSize,
+      logoOpacity,
+      logoRotation,
       memeFormat,
       memeTexts
-    } = req.body
-
-    // Enhanced input validation
-    if (!prompt) {
-      return res.status(400).json({ 
-        error: 'Prompt is required',
-        code: 'MISSING_PROMPT'
-      })
-    }
-
-    if (typeof prompt !== 'string' || prompt.trim().length === 0) {
-      return res.status(400).json({ 
-        error: 'Prompt must be a non-empty string',
-        code: 'INVALID_PROMPT'
-      })
-    }
-
-    if (prompt.length > 500) {
-      return res.status(400).json({ 
-        error: 'Prompt must be less than 500 characters',
-        code: 'PROMPT_TOO_LONG'
-      })
-    }
-
-    const validStyles = ['isometric', 'infographic', 'newyork-cartoon', 'minimalist-linkedin', 'meme']
-    if (!validStyles.includes(style)) {
-      return res.status(400).json({ 
-        error: `Invalid style. Must be one of: ${validStyles.join(', ')}`,
-        code: 'INVALID_STYLE'
-      })
-    }
-
-    const validPositions = ['bottom-left', 'bottom-right', 'top-right']
-    if (!validPositions.includes(position)) {
-      return res.status(400).json({ 
-        error: `Invalid position. Must be one of: ${validPositions.join(', ')}`,
-        code: 'INVALID_POSITION'
-      })
-    }
-
-    if (typeof logoSize !== 'number' || logoSize < 10 || logoSize > 100) {
-      return res.status(400).json({ 
-        error: 'Logo size must be a number between 10 and 100 (percentage)',
-        code: 'INVALID_LOGO_SIZE'
-      })
-    }
-
-    if (typeof logoOpacity !== 'number' || logoOpacity < 0 || logoOpacity > 100) {
-      return res.status(400).json({ 
-        error: 'Logo opacity must be a number between 0 and 100 (percentage)',
-        code: 'INVALID_LOGO_OPACITY'
-      })
-    }
-
-    if (typeof logoRotation !== 'number' || logoRotation < -180 || logoRotation > 180) {
-      return res.status(400).json({ 
-        error: 'Logo rotation must be a number between -180 and 180 (degrees)',
-        code: 'INVALID_LOGO_ROTATION'
-      })
-    }
+    } = validationResult.data
 
     if (!GEMINI_API_KEY) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'Gemini API key not configured',
         message: 'Please add your Gemini API key to the .env file'
       })
@@ -306,24 +254,43 @@ export default async function handler(
 
     // Import style configuration
     const { getStylePrompt } = await import('../../types/styles')
-    
+
     // Get the style-specific prompt
     const stylePrompt = getStylePrompt(style as any)
-    
+
     // Create the full prompt by combining style requirements with user input
-    const fullPrompt = `${stylePrompt}
+    let fullPrompt = `${stylePrompt}
 
 BUSINESS CONTEXT: ${prompt}
 
 Please create an illustration that incorporates this business context while following all the style requirements above.`
 
+    // Optimize prompt with LangChain if configured
+    let promptOptimized = false
+    if (isLangChainConfigured()) {
+      try {
+        const optimizationResult = await optimizeImagePrompt(prompt, style as any)
+        if (optimizationResult.success && optimizationResult.optimizedPrompt) {
+          fullPrompt = `${stylePrompt}
+
+BUSINESS CONTEXT: ${optimizationResult.optimizedPrompt}
+
+Please create an illustration that incorporates this business context while following all the style requirements above.`
+          promptOptimized = true
+          console.log('[LangChain] Prompt optimized successfully')
+        }
+      } catch (langChainError) {
+        console.warn('[LangChain] Optimization failed, using original prompt:', langChainError)
+      }
+    }
+
     // Handle meme generation differently - use templates instead of AI
     if (style === 'meme') {
       console.log('Generating meme with template:', memeFormat)
-      
+
       try {
         // Use meme template instead of AI generation
-        const memeImage = await createMemeFromTemplate(memeFormat, memeTexts)
+        const memeImage = await createMemeFromTemplate(memeFormat || 'drake', memeTexts)
         const finalImageUrl = await addLogoOverlay(memeImage, {
           style,
           position,
@@ -331,17 +298,18 @@ Please create an illustration that incorporates this business context while foll
           logoOpacity,
           logoRotation
         })
-        
+
         return res.status(200).json({
           imageUrl: finalImageUrl,
           prompt: fullPrompt,
           originalPrompt: prompt,
           style: style,
+          duration: Date.now() - startTime,
           message: 'Meme generated successfully with template'
         })
       } catch (memeError) {
         console.error('Meme template error:', memeError)
-        
+
         // Fallback to placeholder
         const placeholderImage = await createPlaceholderImage(style, prompt)
         const finalImageUrl = await addLogoOverlay(placeholderImage, {
@@ -351,12 +319,13 @@ Please create an illustration that incorporates this business context while foll
           logoOpacity,
           logoRotation
         })
-        
+
         return res.status(200).json({
           imageUrl: finalImageUrl,
           prompt: fullPrompt,
           originalPrompt: prompt,
           style: style,
+          duration: Date.now() - startTime,
           message: 'Generated placeholder meme (template error)'
         })
       }
@@ -388,6 +357,8 @@ Please create an illustration that incorporates this business context while foll
         fallback: false,
         modelUsed: generationResult.modelUsed,
         modelsAttempted: generationResult.modelsAttempted,
+        promptOptimized,
+        duration: Date.now() - startTime,
         message: `Image generated successfully with ${generationResult.modelUsed}`
       })
     }
@@ -412,14 +383,16 @@ Please create an illustration that incorporates this business context while foll
       fallback: true,
       fallbackReason: generationResult.error?.message || 'All image generation models failed',
       modelsAttempted: generationResult.modelsAttempted,
+      promptOptimized,
+      duration: Date.now() - startTime,
       message: 'Generated placeholder image (AI temporarily unavailable)'
     })
 
   } catch (error) {
     const errorObj = error instanceof Error ? error : new Error(String(error))
     console.error('Generate image error:', errorObj.message)
-    
-    return res.status(500).json({ 
+
+    return res.status(500).json({
       error: 'Internal server error',
       message: process.env.NODE_ENV === 'development' ? errorObj.message : undefined
     })

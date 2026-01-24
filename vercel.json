@@ -8,6 +8,12 @@
     "src/pages/api/**/*.ts": {
       "maxDuration": 30
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/process-scheduled",
+      "schedule": "*/5 * * * *"
+    }
+  ]
 }
 

@@ -24,7 +24,7 @@ import {
   StatNumber,
   StatHelpText
 } from '@chakra-ui/react'
-import { Trophy, Medal, Award, TrendingUp } from 'lucide-react'
+import { Trophy, Medal, Award, TrendingUp, Flame } from 'lucide-react'
 
 interface LeaderboardEntry {
   userId: string
@@ -34,6 +34,7 @@ interface LeaderboardEntry {
   weeklyPoints: number
   level: number
   generationCount: number
+  currentStreak: number
   rank: number
 }
 
@@ -145,9 +146,20 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ className }) => {
                 <Text fontWeight="semibold" fontSize="sm">
                   {entry.name}
                 </Text>
-                <Text fontSize="xs" color="gray.600">
-                  Level {entry.level} • {entry.generationCount} posts
-                </Text>
+                <HStack fontSize="xs" color="gray.600" spacing={2}>
+                  <Text>Level {entry.level}</Text>
+                  <Text>•</Text>
+                  <Text>{entry.generationCount} posts</Text>
+                  {entry.currentStreak > 0 && (
+                    <>
+                      <Text>•</Text>
+                      <HStack spacing={0.5}>
+                        <Flame size={10} color="#F97316" />
+                        <Text color="orange.500">{entry.currentStreak}d</Text>
+                      </HStack>
+                    </>
+                  )}
+                </HStack>
               </VStack>
             </HStack>
             <VStack align="end" spacing={0}>

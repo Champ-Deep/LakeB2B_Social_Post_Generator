@@ -110,7 +110,140 @@ function calculateLogoPlacement(
 }
 
 /**
- * Apply meme text overlay
+ * Calculate optimal font size and wrap text to fit within bounds
+ * Used for meme text overlays on AI-generated images
+ */
+function calculateMemeTextLayout(
+  text: string,
+  maxWidth: number,
+  maxHeight: number,
+  baseFontSize: number
+): { fontSize: number; lines: string[]; strokeWidth: number } {
+  const maxFontSize = baseFontSize
+  const minFontSize = Math.max(20, Math.floor(baseFontSize * 0.4))
+  const charWidthRatio = 0.6
+
+  // Try to fit text on single line first
+  const textLength = text.length
+  const estimatedWidth = textLength * maxFontSize * charWidthRatio
+
+  if (estimatedWidth <= maxWidth * 0.9) {
+    return {
+      fontSize: maxFontSize,
+      lines: [text.toUpperCase()],
+      strokeWidth: Math.max(2, Math.floor(maxFontSize / 15))
+    }
+  }
+
+  // Need to wrap text
+  const words = text.toUpperCase().split(' ')
+
+  for (let fontSize = maxFontSize; fontSize >= minFontSize; fontSize -= 4) {
+    const charWidth = fontSize * charWidthRatio
+    const maxCharsPerLine = Math.floor((maxWidth * 0.9) / charWidth)
+    const lineHeight = fontSize * 1.3
+    const maxLines = Math.floor(maxHeight / lineHeight)
+
+    const lines: string[] = []
+    let currentLine = ''
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word
+
+      if (testLine.length <= maxCharsPerLine) {
+        currentLine = testLine
+      } else {
+        if (currentLine) lines.push(currentLine)
+        currentLine = word.length > maxCharsPerLine
+          ? word.substring(0, maxCharsPerLine - 3) + '...'
+          : word
+      }
+    }
+
+    if (currentLine) lines.push(currentLine)
+
+    if (lines.length <= Math.max(3, maxLines)) {
+      return {
+        fontSize,
+        lines,
+        strokeWidth: Math.max(2, Math.floor(fontSize / 15))
+      }
+    }
+  }
+
+  // Fallback with minimum font size
+  const charWidth = minFontSize * charWidthRatio
+  const maxCharsPerLine = Math.floor((maxWidth * 0.9) / charWidth)
+  const lines: string[] = []
+  let currentLine = ''
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word
+    if (testLine.length <= maxCharsPerLine) {
+      currentLine = testLine
+    } else {
+      if (currentLine) lines.push(currentLine)
+      currentLine = word.length > maxCharsPerLine
+        ? word.substring(0, maxCharsPerLine - 3) + '...'
+        : word
+    }
+  }
+
+  if (currentLine) lines.push(currentLine)
+
+  // Truncate to 4 lines max with ellipsis
+  if (lines.length > 4) {
+    lines.length = 4
+    lines[3] = lines[3].substring(0, lines[3].length - 3) + '...'
+  }
+
+  return {
+    fontSize: minFontSize,
+    lines,
+    strokeWidth: Math.max(2, Math.floor(minFontSize / 15))
+  }
+}
+
+/**
+ * Create SVG text with proper wrapping for meme overlay
+ */
+function createMemeTextSvg(
+  text: string,
+  svgWidth: number,
+  svgHeight: number,
+  yPosition: string,
+  baseFontSize: number
+): string {
+  const { fontSize, lines, strokeWidth } = calculateMemeTextLayout(
+    text,
+    svgWidth,
+    svgHeight * 0.4,
+    baseFontSize
+  )
+
+  const lineHeight = fontSize * 1.3
+  const totalHeight = lines.length * lineHeight
+  const yPercent = parseFloat(yPosition) / 100
+  const baseY = svgHeight * yPercent
+  const startY = baseY - (totalHeight / 2) + (fontSize / 2)
+
+  const tspans = lines.map((line, i) =>
+    `<tspan x="50%" y="${startY + (i * lineHeight)}">${line}</tspan>`
+  ).join('')
+
+  return `
+    <svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">
+      <text text-anchor="middle" font-family="Impact, Arial Black, sans-serif"
+            font-size="${fontSize}" font-weight="bold" fill="white"
+            stroke="black" stroke-width="${strokeWidth}" paint-order="stroke">
+        ${tspans}
+      </text>
+    </svg>
+  `
+}
+
+/**
+ * Apply meme text overlay with dynamic font sizing and word wrapping
  */
 async function addMemeTextOverlay(
   image: sharp.Sharp,
@@ -119,142 +252,72 @@ async function addMemeTextOverlay(
 ): Promise<sharp.Sharp> {
   const width = metadata.width || 1080
   const height = metadata.height || 1080
-  
+
   const composites: sharp.OverlayOptions[] = []
-  
-  // Determine meme format from style
   const style = options.style || ''
-  
+
   if (style.startsWith('meme-')) {
-    const fontSize = Math.max(36, Math.floor(width / 20))
-    const strokeWidth = Math.max(3, Math.floor(fontSize / 12))
-    
-    // Create text overlays based on meme type
+    const baseFontSize = Math.max(36, Math.floor(width / 18))
+
     if (style === 'meme-drake' && options.memeTopText && options.memeBottomText) {
-      // Top panel text
-      const topTextSvg = `
-        <svg width="${width}" height="${height/2}">
-          <text x="50%" y="20%" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" 
-                font-size="${fontSize}" font-weight="bold" fill="white" 
-                stroke="black" stroke-width="${strokeWidth}">
-            ${options.memeTopText.toUpperCase()}
-          </text>
-        </svg>
-      `
+      // Drake format: top and bottom panels
       composites.push({
-        input: Buffer.from(topTextSvg),
+        input: Buffer.from(createMemeTextSvg(options.memeTopText, width, height / 2, '50', baseFontSize)),
         top: 0,
         left: 0
       })
-      
-      // Bottom panel text
-      const bottomTextSvg = `
-        <svg width="${width}" height="${height/2}">
-          <text x="50%" y="20%" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" 
-                font-size="${fontSize}" font-weight="bold" fill="white" 
-                stroke="black" stroke-width="${strokeWidth}">
-            ${options.memeBottomText.toUpperCase()}
-          </text>
-        </svg>
-      `
       composites.push({
-        input: Buffer.from(bottomTextSvg),
-        top: Math.floor(height/2),
+        input: Buffer.from(createMemeTextSvg(options.memeBottomText, width, height / 2, '50', baseFontSize)),
+        top: Math.floor(height / 2),
         left: 0
       })
     } else if ((style === 'meme-brain' || style === 'meme-expanding') && options.memeTexts) {
-      // Multiple text overlays for expanding brain meme
       const panelHeight = height / 4
       options.memeTexts.slice(0, 4).forEach((text, index) => {
-        const textSvg = `
-          <svg width="${width/2}" height="${panelHeight}">
-            <text x="10" y="50%" font-family="Impact, Arial Black, sans-serif" 
-                  font-size="${fontSize * 0.8}" font-weight="bold" fill="white" 
-                  stroke="black" stroke-width="${strokeWidth}">
-              ${text.toUpperCase()}
-            </text>
-          </svg>
-        `
         composites.push({
-          input: Buffer.from(textSvg),
+          input: Buffer.from(createMemeTextSvg(text, width / 2, panelHeight, '50', baseFontSize * 0.7)),
           top: Math.floor(index * panelHeight),
           left: 0
         })
       })
-    } else if (style === 'meme-woman-cat' && options.memeTexts && Array.isArray(options.memeTexts) && options.memeTexts.length >= 2) {
-      // Woman text (left)
-      const womanTextSvg = `
-        <svg width="${width/2}" height="${height}">
-          <text x="50%" y="90%" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" 
-                font-size="${fontSize}" font-weight="bold" fill="white" 
-                stroke="black" stroke-width="${strokeWidth}">
-            ${options.memeTexts[0].toUpperCase()}
-          </text>
-        </svg>
-      `
+    } else if (style === 'meme-woman-cat' && options.memeTexts && options.memeTexts.length >= 2) {
+      // Woman text (left panel)
+      const womanText = options.memeTexts[0]
+      const catText = options.memeTexts[1]
       composites.push({
-        input: Buffer.from(womanTextSvg),
+        input: Buffer.from(createMemeTextSvg(womanText, width / 2, height, '85', baseFontSize)),
         top: 0,
         left: 0
       })
-      
-      // Cat text (right)
-      const catTextSvg = `
-        <svg width="${width/2}" height="${height}">
-          <text x="50%" y="90%" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" 
-                font-size="${fontSize}" font-weight="bold" fill="white" 
-                stroke="black" stroke-width="${strokeWidth}">
-            ${options.memeTexts[1].toUpperCase()}
-          </text>
-        </svg>
-      `
+      // Cat text (right panel)
       composites.push({
-        input: Buffer.from(catTextSvg),
+        input: Buffer.from(createMemeTextSvg(catText, width / 2, height, '85', baseFontSize)),
         top: 0,
-        left: Math.floor(width/2)
+        left: Math.floor(width / 2)
       })
     } else if (options.memeTopText || options.memeBottomText) {
-      // Standard top/bottom text
+      // Standard top/bottom meme text
       if (options.memeTopText) {
-        const topTextSvg = `
-          <svg width="${width}" height="${height}">
-            <text x="50%" y="10%" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" 
-                  font-size="${fontSize}" font-weight="bold" fill="white" 
-                  stroke="black" stroke-width="${strokeWidth}">
-              ${options.memeTopText.toUpperCase()}
-            </text>
-          </svg>
-        `
         composites.push({
-          input: Buffer.from(topTextSvg),
+          input: Buffer.from(createMemeTextSvg(options.memeTopText, width, height / 3, '50', baseFontSize)),
           top: 0,
           left: 0
         })
       }
-      
       if (options.memeBottomText) {
-        const bottomTextSvg = `
-          <svg width="${width}" height="${height}">
-            <text x="50%" y="95%" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" 
-                  font-size="${fontSize}" font-weight="bold" fill="white" 
-                  stroke="black" stroke-width="${strokeWidth}">
-              ${options.memeBottomText.toUpperCase()}
-            </text>
-          </svg>
-        `
         composites.push({
-          input: Buffer.from(bottomTextSvg),
-          top: 0,
+          input: Buffer.from(createMemeTextSvg(options.memeBottomText, width, height / 3, '50', baseFontSize)),
+          top: Math.floor(height * 0.75),
           left: 0
         })
       }
     }
   }
-  
+
   if (composites.length > 0) {
     return image.composite(composites)
   }
-  
+
   return image
 }
 
@@ -434,11 +497,125 @@ export async function createMemeFromTemplate(
     
     // Prepare text overlays based on format
     const composites: sharp.OverlayOptions[] = []
-    const fontSize = 60
     const strokeWidth = 3
-    
-    // Helper function to create text SVG
-    const createTextSvg = (text: string, x: string, y: string, maxWidth: number = width, anchor: string = 'middle') => {
+
+    /**
+     * Calculate optimal font size based on text length and available width
+     * Uses approximate character width ratios for Impact font
+     */
+    const calculateOptimalFontSize = (text: string, maxWidth: number, maxHeight: number = 200): { fontSize: number; lines: string[] } => {
+      const maxFontSize = 72
+      const minFontSize = 24
+      const lineHeightRatio = 1.2
+
+      // Approximate character width ratio for Impact font (avg width / font size)
+      const charWidthRatio = 0.6
+
+      // Try to fit text on single line first
+      const textLength = text.length
+      const estimatedWidth = textLength * maxFontSize * charWidthRatio
+
+      if (estimatedWidth <= maxWidth * 0.85) {
+        // Text fits on single line with max font size
+        return { fontSize: maxFontSize, lines: [text.toUpperCase()] }
+      }
+
+      // Need to wrap text - calculate optimal font size and line breaks
+      const words = text.toUpperCase().split(' ')
+
+      // Try different font sizes from large to small
+      for (let fontSize = maxFontSize; fontSize >= minFontSize; fontSize -= 4) {
+        const charWidth = fontSize * charWidthRatio
+        const maxCharsPerLine = Math.floor((maxWidth * 0.85) / charWidth)
+        const lineHeight = fontSize * lineHeightRatio
+        const maxLines = Math.floor(maxHeight / lineHeight)
+
+        // Build lines with word wrapping
+        const lines: string[] = []
+        let currentLine = ''
+
+        for (const word of words) {
+          const testLine = currentLine ? `${currentLine} ${word}` : word
+
+          if (testLine.length <= maxCharsPerLine) {
+            currentLine = testLine
+          } else {
+            if (currentLine) {
+              lines.push(currentLine)
+            }
+            // Handle words longer than max width by truncating
+            if (word.length > maxCharsPerLine) {
+              currentLine = word.substring(0, maxCharsPerLine - 3) + '...'
+            } else {
+              currentLine = word
+            }
+          }
+        }
+
+        if (currentLine) {
+          lines.push(currentLine)
+        }
+
+        // Check if text fits within max lines
+        if (lines.length <= maxLines) {
+          return { fontSize, lines }
+        }
+      }
+
+      // Fallback: use minimum font size and truncate if needed
+      const charWidth = minFontSize * charWidthRatio
+      const maxCharsPerLine = Math.floor((maxWidth * 0.85) / charWidth)
+      const lineHeight = minFontSize * lineHeightRatio
+      const maxLines = Math.floor(maxHeight / lineHeight)
+
+      const lines: string[] = []
+      let currentLine = ''
+
+      for (const word of words) {
+        if (lines.length >= maxLines - 1 && currentLine) {
+          // Last line - check if we need to truncate
+          const testLine = `${currentLine} ${word}`
+          if (testLine.length > maxCharsPerLine) {
+            lines.push(currentLine.substring(0, maxCharsPerLine - 3) + '...')
+            break
+          }
+        }
+
+        const testLine = currentLine ? `${currentLine} ${word}` : word
+        if (testLine.length <= maxCharsPerLine) {
+          currentLine = testLine
+        } else {
+          if (currentLine) {
+            lines.push(currentLine)
+          }
+          currentLine = word.length > maxCharsPerLine ? word.substring(0, maxCharsPerLine - 3) + '...' : word
+        }
+      }
+
+      if (currentLine && lines.length < maxLines) {
+        lines.push(currentLine)
+      }
+
+      return { fontSize: minFontSize, lines }
+    }
+
+    // Helper function to create text SVG with dynamic sizing and word wrapping
+    const createTextSvg = (text: string, x: string, y: string, maxWidth: number = width, anchor: string = 'middle', maxHeight: number = 200) => {
+      const { fontSize, lines } = calculateOptimalFontSize(text, maxWidth, maxHeight)
+      const lineHeight = fontSize * 1.2
+
+      // Calculate starting Y position to center text vertically
+      const totalTextHeight = lines.length * lineHeight
+      const yPercent = parseFloat(y)
+      const baseY = yPercent ? (height * yPercent / 100) : height / 2
+      const startY = baseY - (totalTextHeight / 2) + (fontSize / 2)
+
+      // Generate tspan elements for each line
+      const textLines = lines.map((line, index) => {
+        const lineY = startY + (index * lineHeight)
+        return `<tspan x="${x}" y="${lineY}">${line}</tspan>`
+      }).join('\n            ')
+
       return Buffer.from(`
         <svg width="${maxWidth}" height="${height}" xmlns="http://www.w3.org/2000/svg">
           <style>
@@ -452,8 +629,8 @@ export async function createMemeFromTemplate(
               paint-order: stroke;
             }
           </style>
-          <text x="${x}" y="${y}" class="meme-text" text-anchor="${anchor}">
-            ${text.toUpperCase()}
+          <text class="meme-text" text-anchor="${anchor}">
+            ${textLines}
           </text>
         </svg>
       `)

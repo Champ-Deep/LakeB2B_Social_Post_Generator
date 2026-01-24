@@ -54,3 +54,4 @@ nohup.out
 
 # Playwright
 .playwright-mcp/
+/src/generated/prisma

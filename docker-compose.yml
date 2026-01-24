@@ -1,0 +1,178 @@
+# LakeB2B Social Post Creator - Docker Compose
+# Self-hosted deployment with PostgreSQL (matches Vercel/Supabase config)
+
+services:
+  # ============================================
+  # Main Application
+  # ============================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lakeb2b-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://lakeb2b:${POSTGRES_PASSWORD:-lakeb2b_secure_password}@postgres:5432/lakeb2b
+      - DATABASE_PROVIDER=postgresql
+      - REDIS_URL=redis://redis:6379
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-your-better-auth-secret-change-this}
+      - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:3000}
+      - CRON_SECRET=${CRON_SECRET:-your-cron-secret-change-this}
+      - LINKEDIN_CLIENT_ID=${LINKEDIN_CLIENT_ID:-}
+      - LINKEDIN_CLIENT_SECRET=${LINKEDIN_CLIENT_SECRET:-}
+      - LINKEDIN_REDIRECT_URI=${LINKEDIN_REDIRECT_URI:-http://localhost:3000/api/auth/linkedin/callback}
+      - LINKEDIN_TOKEN_ENCRYPTION_KEY=${LINKEDIN_TOKEN_ENCRYPTION_KEY:-}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+    volumes:
+      - lakeb2b-uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - lakeb2b-network
+
+  # ============================================
+  # Background Worker (Job Queue Processor)
+  # ============================================
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: lakeb2b-worker
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://lakeb2b:${POSTGRES_PASSWORD:-lakeb2b_secure_password}@postgres:5432/lakeb2b
+      - DATABASE_PROVIDER=postgresql
+      - REDIS_URL=redis://redis:6379
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - lakeb2b-uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - lakeb2b-network
+
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: lakeb2b-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=lakeb2b
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-lakeb2b_secure_password}
+      - POSTGRES_DB=lakeb2b
+    volumes:
+      - lakeb2b-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lakeb2b -d lakeb2b"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lakeb2b-network
+
+  # ============================================
+  # Redis (Job Queue Backend)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: lakeb2b-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - lakeb2b-redis:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lakeb2b-network
+
+  # ============================================
+  # Cron Scheduler (for scheduled posts)
+  # ============================================
+  cron:
+    image: curlimages/curl:8.5.0
+    container_name: lakeb2b-cron
+    restart: unless-stopped
+    environment:
+      - CRON_SECRET=${CRON_SECRET:-your-cron-secret-change-this}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Starting cron scheduler..."
+        while true; do
+          echo "Running scheduled post processor at $$(date)"
+          curl -s -X GET \
+            -H "Authorization: Bearer $$CRON_SECRET" \
+            http://app:3000/api/cron/process-scheduled || true
+          sleep 300  # Run every 5 minutes
+        done
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - lakeb2b-network
+
+  # ============================================
+  # Database Migration (run once on first deploy)
+  # ============================================
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lakeb2b-migrate
+    environment:
+      - DATABASE_URL=postgresql://lakeb2b:${POSTGRES_PASSWORD:-lakeb2b_secure_password}@postgres:5432/lakeb2b
+    command: npx prisma db push --skip-generate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - lakeb2b-network
+    profiles:
+      - migrate
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  lakeb2b-network:
+    driver: bridge
+
+# ============================================
+# Volumes (Persistent Storage)
+# ============================================
+volumes:
+  lakeb2b-postgres:
+    driver: local
+  lakeb2b-uploads:
+    driver: local
+  lakeb2b-redis:
+    driver: local

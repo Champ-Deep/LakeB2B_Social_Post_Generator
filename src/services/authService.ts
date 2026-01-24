@@ -1,41 +1,16 @@
 import { User, LoginCredentials, RegisterCredentials, AuthResponse } from '../types/auth'
 import { rewardsService } from './rewardsService'
-import { createBrowserClient } from '@supabase/ssr'
-import type { SupabaseClient, Session } from '@supabase/supabase-js'
-
-// Singleton Supabase client instance
-let supabaseClientInstance: SupabaseClient | null = null
+import { authClient, signIn, signUp, signOut, getSession } from '../lib/auth/client'
 
 /**
- * Create Supabase client for browser
- * Uses @supabase/ssr which automatically handles cookie storage
- * The middleware handles session refresh on server-side requests
+ * AuthService - Client-side authentication using Better-Auth
+ *
+ * Handles user login, logout, and session management.
+ * Works with the Better-Auth backend at /api/auth/[...all].ts
  */
-function getSupabaseClient(): SupabaseClient | null {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('Supabase configuration is missing. Auth features will be disabled.')
-    return null
-  }
-
-  // Return existing instance if already created
-  if (supabaseClientInstance) {
-    return supabaseClientInstance
-  }
-
-  // Create browser client - @supabase/ssr automatically handles cookie storage
-  // No custom cookie handlers needed - the library handles it correctly by default
-  supabaseClientInstance = createBrowserClient(supabaseUrl, supabaseAnonKey)
-
-  return supabaseClientInstance
-}
-
 export class AuthService {
   private static instance: AuthService
   private currentUser: User | null = null
-  private supabase: SupabaseClient | null = null
 
   static getInstance(): AuthService {
     if (!AuthService.instance) {
@@ -44,22 +19,15 @@ export class AuthService {
     return AuthService.instance
   }
 
-  private getClient(): SupabaseClient | null {
-    if (!this.supabase) {
-      this.supabase = getSupabaseClient()
-    }
-    return this.supabase
-  }
-
   /**
-   * Map Supabase session to our User interface
+   * Map Better-Auth session to our User interface
    */
-  private mapSessionToUser(session: Session): User {
+  private mapSessionToUser(session: { user: { id: string; email: string; name?: string | null } }): User {
     const user = session.user
     return {
       id: user.id,
       email: user.email || '',
-      name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+      name: user.name || user.email?.split('@')[0] || 'User',
       totalPoints: 0,
       level: 1,
       achievements: [],
@@ -69,7 +37,7 @@ export class AuthService {
 
   /**
    * Login with email and password
-   * Uses custom LakeB2B API for lakeb2b emails, Supabase for others
+   * Uses Better-Auth for all authentication
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const { email, password } = credentials
@@ -80,67 +48,36 @@ export class AuthService {
 
     const emailLower = email.toLowerCase().trim()
 
-    // Check if this is a lakeb2b email - use custom API
-    if (emailLower.includes('lakeb2b')) {
-      try {
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: emailLower, password }),
-          credentials: 'include'
-        })
-
-        const data = await response.json()
-
-        if (!response.ok || !data.success) {
-          return { success: false, error: data.error || 'Login failed' }
-        }
-
-        // Set current user from API response
-        this.currentUser = {
-          id: data.user.id,
-          email: data.user.email,
-          name: data.user.name,
-          totalPoints: 0,
-          level: 1,
-          achievements: [],
-          generationCount: 0
-        }
-
-        return {
-          success: true,
-          user: this.currentUser,
-          message: 'Login successful'
-        }
-      } catch (error) {
-        console.error('LakeB2B login error:', error)
-        return { success: false, error: 'Network error. Please try again.' }
-      }
-    }
-
-    // Use Supabase for non-lakeb2b emails
     try {
-      const supabase = this.getClient()
-      if (!supabase) {
-        return { success: false, error: 'Authentication service is not configured' }
-      }
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
+      // Use Better-Auth signIn
+      const result = await signIn.email({
+        email: emailLower,
+        password,
       })
 
-      if (error) {
-        return { success: false, error: error.message }
+      if (result.error) {
+        return {
+          success: false,
+          error: result.error.message || 'Login failed'
+        }
       }
 
-      if (!data.session) {
-        return { success: false, error: 'Login failed - no session returned' }
+      if (!result.data?.user) {
+        return { success: false, error: 'Login failed - no user returned' }
       }
 
-      this.currentUser = this.mapSessionToUser(data.session)
+      // Map session to user
+      this.currentUser = {
+        id: result.data.user.id,
+        email: result.data.user.email || '',
+        name: result.data.user.name || result.data.user.email?.split('@')[0] || 'User',
+        totalPoints: 0,
+        level: 1,
+        achievements: [],
+        generationCount: 0
+      }
 
-      // Load user stats from profile
+      // Load user stats from API
       await this.loadUserStats()
 
       return {
@@ -155,7 +92,7 @@ export class AuthService {
   }
 
   /**
-   * Register new user with Supabase
+   * Register new user with Better-Auth
    */
   async register(credentials: RegisterCredentials): Promise<AuthResponse> {
     const { email, password, name } = credentials
@@ -164,35 +101,45 @@ export class AuthService {
       return { success: false, error: 'Email and password are required' }
     }
 
-    try {
-      const supabase = this.getClient()
-      if (!supabase) {
-        return { success: false, error: 'Authentication service is not configured' }
-      }
+    const emailLower = email.toLowerCase().trim()
 
-      const { data, error } = await supabase.auth.signUp({
-        email,
+    // Validate LakeB2B email domain
+    if (!emailLower.includes('lakeb2b')) {
+      return {
+        success: false,
+        error: 'Registration is only available for LakeB2B employees'
+      }
+    }
+
+    try {
+      // Use Better-Auth signUp
+      const result = await signUp.email({
+        email: emailLower,
         password,
-        options: {
-          data: {
-            name: name || email.split('@')[0]
-          }
-        }
+        name: name || emailLower.split('@')[0],
       })
 
-      if (error) {
-        return { success: false, error: error.message }
-      }
-
-      if (!data.session) {
-        // Email confirmation required
+      if (result.error) {
         return {
-          success: true,
-          message: 'Please check your email to confirm your account'
+          success: false,
+          error: result.error.message || 'Registration failed'
         }
       }
 
-      this.currentUser = this.mapSessionToUser(data.session)
+      if (!result.data?.user) {
+        return { success: false, error: 'Registration failed - no user returned' }
+      }
+
+      // Map session to user
+      this.currentUser = {
+        id: result.data.user.id,
+        email: result.data.user.email || '',
+        name: result.data.user.name || result.data.user.email?.split('@')[0] || 'User',
+        totalPoints: 0,
+        level: 1,
+        achievements: [],
+        generationCount: 0
+      }
 
       return {
         success: true,
@@ -207,26 +154,12 @@ export class AuthService {
 
   /**
    * Login with LinkedIn OAuth
+   * Note: This redirects to the LinkedIn OAuth connect flow
    */
   async loginWithLinkedIn(): Promise<{ success: boolean; error?: string }> {
     try {
-      const supabase = this.getClient()
-      if (!supabase) {
-        return { success: false, error: 'Authentication service is not configured' }
-      }
-
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'linkedin_oidc',
-        options: {
-          redirectTo: `${window.location.origin}/api/auth/callback`,
-          scopes: 'openid profile email'
-        }
-      })
-
-      if (error) {
-        return { success: false, error: error.message }
-      }
-
+      // Redirect to LinkedIn OAuth connect endpoint
+      window.location.href = '/api/auth/linkedin/connect?returnUrl=' + encodeURIComponent(window.location.pathname)
       return { success: true }
     } catch (error) {
       console.error('LinkedIn login error:', error)
@@ -235,20 +168,11 @@ export class AuthService {
   }
 
   /**
-   * Logout - clear both LakeB2B and Supabase sessions
+   * Logout - clear Better-Auth session
    */
   async logout(): Promise<void> {
     try {
-      // Clear lakeb2b_token cookie
-      if (typeof document !== 'undefined') {
-        document.cookie = 'lakeb2b_token=; Path=/; Max-Age=0'
-      }
-
-      // Logout from Supabase
-      const supabase = this.getClient()
-      if (supabase) {
-        await supabase.auth.signOut()
-      }
+      await signOut()
     } catch (error) {
       console.error('Logout error:', error)
     }
@@ -263,16 +187,12 @@ export class AuthService {
   }
 
   /**
-   * Get current session from Supabase
+   * Get current session from Better-Auth
    */
-  async getSession(): Promise<Session | null> {
+  async getSession(): Promise<{ user: { id: string; email: string; name?: string | null } } | null> {
     try {
-      const supabase = this.getClient()
-      if (!supabase) {
-        return null
-      }
-      const { data: { session } } = await supabase.auth.getSession()
-      return session
+      const session = await getSession()
+      return session.data || null
     } catch (error) {
       console.error('Get session error:', error)
       return null
@@ -281,56 +201,18 @@ export class AuthService {
 
   /**
    * Verify and restore session
-   * Checks both LakeB2B tokens and Supabase sessions
+   * Checks Better-Auth session
    */
   async verifyToken(): Promise<User | null> {
     try {
-      // First check for lakeb2b_token cookie
-      if (typeof document !== 'undefined') {
-        const cookies = document.cookie.split(';')
-        const lakeb2bCookie = cookies.find(c => c.trim().startsWith('lakeb2b_token='))
-        if (lakeb2bCookie) {
-          // Verify the token via API
-          try {
-            const response = await fetch('/api/auth/verify', {
-              method: 'GET',
-              credentials: 'include'
-            })
-            if (response.ok) {
-              const data = await response.json()
-              if (data.success && data.user) {
-                this.currentUser = {
-                  id: data.user.id,
-                  email: data.user.email,
-                  name: data.user.name,
-                  totalPoints: 0,
-                  level: 1,
-                  achievements: [],
-                  generationCount: 0
-                }
-                return this.currentUser
-              }
-            }
-          } catch (verifyError) {
-            console.error('LakeB2B token verification error:', verifyError)
-          }
-        }
-      }
+      const session = await getSession()
 
-      // Then check Supabase session
-      const supabase = this.getClient()
-      if (!supabase) {
-        this.currentUser = null
-        return null
-      }
-      const { data: { session }, error } = await supabase.auth.getSession()
-
-      if (error || !session) {
+      if (!session.data?.user) {
         this.currentUser = null
         return null
       }
 
-      this.currentUser = this.mapSessionToUser(session)
+      this.currentUser = this.mapSessionToUser(session.data)
 
       // Load user stats
       await this.loadUserStats()
@@ -345,28 +227,43 @@ export class AuthService {
 
   /**
    * Set up auth state change listener
+   * Note: Better-Auth doesn't have built-in state change listener like Supabase
+   * We poll the session periodically or use React hooks (useSession)
    */
   onAuthStateChange(callback: (user: User | null) => void): () => void {
-    const supabase = this.getClient()
-    if (!supabase) {
-      // Return a no-op unsubscribe function when Supabase is not configured
-      return () => {}
-    }
+    // For Better-Auth, we use a simple polling approach or React hooks
+    // Return a no-op unsubscribe function
+    // In practice, use the useSession hook in React components
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (session) {
-          this.currentUser = this.mapSessionToUser(session)
-          await this.loadUserStats()
+    let cancelled = false
+
+    const checkSession = async () => {
+      if (cancelled) return
+
+      try {
+        const session = await getSession()
+        if (session.data?.user) {
+          this.currentUser = this.mapSessionToUser(session.data)
           callback(this.currentUser)
         } else {
           this.currentUser = null
           callback(null)
         }
+      } catch {
+        // Ignore errors during polling
       }
-    )
+    }
 
-    return () => subscription.unsubscribe()
+    // Initial check
+    checkSession()
+
+    // Poll every 30 seconds
+    const interval = setInterval(checkSession, 30000)
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }
 
   async updateUserPoints(userId: string, points: number): Promise<{ user: User | null, newAchievements: any[] }> {

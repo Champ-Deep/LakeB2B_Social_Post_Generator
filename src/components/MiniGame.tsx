@@ -11,11 +11,12 @@ import {
   Badge,
   Flex,
   Icon,
-  useToast,
   Fade,
   Input
 } from '@chakra-ui/react'
+import toast from 'react-hot-toast'
 import { Mail, Target, TrendingUp, Users, X, Zap } from 'lucide-react'
+import { useGubey } from './Gubey/GubeyProvider'
 
 interface MiniGameProps {
   isVisible: boolean
@@ -34,11 +35,11 @@ const GAME_ICONS = [
 
 type GameType = 'match' | 'quickclick' | 'collector'
 
-const MiniGame: React.FC<MiniGameProps> = ({ 
-  isVisible, 
-  onClose, 
+const MiniGame: React.FC<MiniGameProps> = ({
+  isVisible,
+  onClose,
   onComplete,
-  generationProgress 
+  generationProgress
 }) => {
   const [currentGame, setCurrentGame] = useState<GameType>('match')
   const [score, setScore] = useState(0)
@@ -47,7 +48,9 @@ const MiniGame: React.FC<MiniGameProps> = ({
   const [gameSpecificData, setGameSpecificData] = useState<any>({})
   const [generationComplete, setGenerationComplete] = useState(false)
   const [showFinishPrompt, setShowFinishPrompt] = useState(false)
-  const toast = useToast()
+
+  // Gubey integration for mascot reactions
+  const { dispatch: gubeyDispatch, trackInteraction: gubeyTrackInteraction } = useGubey()
 
   // Game titles
   const getGameTitle = () => {
@@ -115,8 +118,10 @@ const MiniGame: React.FC<MiniGameProps> = ({
   useEffect(() => {
     if (isVisible) {
       initializeGame()
+      // Track game start for analytics
+      gubeyTrackInteraction('game_started', { gameType: currentGame })
     }
-  }, [isVisible, initializeGame])
+  }, [isVisible, initializeGame, gubeyTrackInteraction, currentGame])
 
   // Track generation completion
   useEffect(() => {
@@ -221,14 +226,26 @@ const MiniGame: React.FC<MiniGameProps> = ({
     const generationBonus = generationComplete ? 25 : 0 // Bonus for finishing after generation
     const finalScore = score + bonusPoints + generationBonus
     onComplete?.(finalScore)
-    
+
     if (completed) {
-      toast({
-        title: `${getGameTitle()} completed! Score: ${finalScore}`,
-        description: generationComplete ? "Bonus for finishing after generation!" : undefined,
-        status: "success",
-        duration: 3000,
-        position: "top"
+      // Trigger Gubey celebration on game win
+      gubeyDispatch({ type: 'GAME_WIN', payload: { score: finalScore, gameType: currentGame } })
+
+      // Track game completion for analytics
+      gubeyTrackInteraction('game_completed', {
+        gameType: currentGame,
+        score: finalScore,
+        timeRemaining: timeLeft,
+        wasGenerationComplete: generationComplete
+      })
+
+      const bonusMsg = generationComplete ? ' (Bonus for finishing after generation!)' : ''
+      toast.success(`${getGameTitle()} completed! Score: ${finalScore}${bonusMsg}`)
+    } else {
+      // Track game timeout
+      gubeyTrackInteraction('game_timeout', {
+        gameType: currentGame,
+        score: finalScore
       })
     }
   }
