@@ -231,6 +231,10 @@ export default async function handler(
     const validationResult = validateImageGenerationRequest(req.body)
 
     if (!validationResult.success) {
+      console.error('[Image Generation] Validation failed:', {
+        body: req.body,
+        error: validationResult.error
+      })
       return res.status(400).json(validationResult.error)
     }
 
