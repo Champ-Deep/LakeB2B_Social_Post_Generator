@@ -31,7 +31,6 @@
     "@fontsource/montserrat": "^5.0.16",
     "@langchain/core": "^1.1.17",
     "@langchain/google-genai": "^2.1.13",
-    "@next/swc-darwin-arm64": "^16.1.4",
     "@prisma/client": "^5.22.0",
     "@remotion/bundler": "^4.0.409",
     "@remotion/cli": "^4.0.409",
