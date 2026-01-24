@@ -6,6 +6,7 @@
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "HOST=0.0.0.0 PORT=3000 next start",
+    "postinstall": "prisma generate",
     "lint": "next lint",
     "validate": "node scripts/startup-validation.js",
     "dev:supervised": "node scripts/start-with-supervisor.js",
