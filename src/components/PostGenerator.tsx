@@ -49,6 +49,7 @@ import { MagicFix } from './MagicFix'
 import { useGubey } from './Gubey'
 import { useDraftPersistence, DraftData } from '../hooks/useDraftPersistence'
 import { trackImageGeneration, trackStyleSelection, trackFeatureUsage } from '../lib/analytics/posthog'
+import PostEditor from './PostEditor'
 
 const PostGenerator: React.FC = () => {
   const [formData, setFormData] = useState<PostFormData>({
@@ -72,6 +73,7 @@ const PostGenerator: React.FC = () => {
   const { isAuthenticated, addPoints, incrementGeneration } = useAuth()
   const { dispatch: gubeyDispatch } = useGubey()
   const previousStyleRef = useRef(selectedStyle)
+  const [showPostEditor, setShowPostEditor] = useState(false)
 
   // Draft persistence for form recovery
   const handleDraftRestored = useCallback((draft: DraftData) => {
@@ -213,6 +215,7 @@ const PostGenerator: React.FC = () => {
     setIsGenerating(true)
     setError('')
     setGenerationProgress(0)
+    setShowPostEditor(false) // Hide post editor when starting new generation
 
     // Notify Gubey mascot that generation started
     gubeyDispatch({ type: 'START_GENERATION' })
@@ -272,6 +275,7 @@ const PostGenerator: React.FC = () => {
       clearInterval(progressInterval)
       setGenerationProgress(100)
       setGeneratedImageUrl(response.data.imageUrl)
+      setShowPostEditor(true) // Show PostEditor after successful generation
 
       // Track successful generation
       trackImageGeneration({
@@ -691,43 +695,58 @@ const PostGenerator: React.FC = () => {
 
           {/* Preview Panel */}
           <Box flex={1}>
-            <Tabs isFitted variant="soft-rounded" colorScheme="purple">
-              <TabList mb="1em" bg="white" p={1} borderRadius="xl" boxShadow="sm">
-                <Tab borderRadius="lg">
-                  <HStack spacing={2}>
-                    <Icon as={ImageIconLucide} size={18} />
-                    <Text fontSize="sm" fontWeight="bold">Image Preview</Text>
-                  </HStack>
-                </Tab>
-                <Tab borderRadius="lg">
-                  <HStack spacing={2}>
-                    <Icon as={Video} size={18} />
-                    <Text fontSize="sm" fontWeight="bold">Video Preview</Text>
-                  </HStack>
-                </Tab>
-              </TabList>
+            {showPostEditor && generatedImageUrl ? (
+              <PostEditor
+                imageUrl={generatedImageUrl}
+                initialMessage={formData.message}
+                initialHeadline={formData.headline}
+                style={selectedStyle}
+                onClose={() => {
+                  setShowPostEditor(false)
+                  setGeneratedImageUrl('')
+                  setFormData({ message: '', headline: '' })
+                }}
+                isLinkedInConnected={false}
+              />
+            ) : (
+              <Tabs isFitted variant="soft-rounded" colorScheme="purple">
+                <TabList mb="1em" bg="white" p={1} borderRadius="xl" boxShadow="sm">
+                  <Tab borderRadius="lg">
+                    <HStack spacing={2}>
+                      <Icon as={ImageIconLucide} size={18} />
+                      <Text fontSize="sm" fontWeight="bold">Image Preview</Text>
+                    </HStack>
+                  </Tab>
+                  <Tab borderRadius="lg">
+                    <HStack spacing={2}>
+                      <Icon as={Video} size={18} />
+                      <Text fontSize="sm" fontWeight="bold">Video Preview</Text>
+                    </HStack>
+                  </Tab>
+                </TabList>
 
-              <TabPanels>
-                <TabPanel p={0}>
-                  <ImagePreview
-                    imageUrl={generatedImageUrl}
-                    isLoading={isGenerating}
-                    style={selectedStyle}
-                    logoPosition={logoPosition}
-                    generationProgress={generationProgress}
-                  />
-                </TabPanel>
-                <TabPanel p={0}>
-                  <VideoPreview
-                    title={formData.headline || 'LakeB2B Social Post'}
-                    subtitle={formData.message || 'Empowering your brand with AI.'}
-                    imageUrl={generatedImageUrl}
-                    logoUrl="/logos/lakeb2b-logo-square.png"
-                    isLoading={isGenerating}
-                  />
-                </TabPanel>
-              </TabPanels>
-            </Tabs>
+                <TabPanels>
+                  <TabPanel p={0}>
+                    <ImagePreview
+                      imageUrl={generatedImageUrl}
+                      isLoading={isGenerating}
+                      style={selectedStyle}
+                      logoPosition={logoPosition}
+                      generationProgress={generationProgress}
+                    />
+                  </TabPanel>
+                  <TabPanel p={0}>
+                    <VideoPreview
+                      title={formData.headline || 'LakeB2B Social Post'}
+                      subtitle={formData.message || 'Empowering your brand with AI.'}
+                      imageUrl={generatedImageUrl}
+                      logoUrl="/logos/lakeb2b-logo-square.png"
+                      isLoading={isGenerating}
+                    />
+                  </TabPanel>
+                </TabPanels>
+              </Tabs>
+            )}
           </Box>
         </HStack>
 
