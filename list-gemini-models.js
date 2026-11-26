@@ -1,7 +1,12 @@
-const API_KEY = 'AIzaSyDGpes7OqpMAvCHz0Gz51jOFgkF-yce29Q';
+const API_KEY = process.env.GEMINI_API_KEY;
 
 async function listModels() {
-    console.log(`🔍 Listing available models...`);
+    if (!API_KEY) {
+        console.error('GEMINI_API_KEY is not set. Copy .env.example to .env.local and set GEMINI_API_KEY.');
+        process.exit(1);
+    }
+
+    console.log('🔍 Listing available models...');
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`;
 
